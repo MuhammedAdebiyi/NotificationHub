@@ -1,0 +1,18 @@
+# React
+node_modules/
+dist/
+
+# ASP.NET
+bin/
+obj/
+
+# IDE
+.vs/
+.vscode/
+
+# OS
+.DS_Store
+
+# Environment
+.env
+.env.*

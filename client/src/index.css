@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-paper: #FFFFFF;
+  --color-ink: #15131B;
+  --color-violet: #6D28D9;
+  --color-coral: #FF6452;
+  --color-teal: #0E9F84;
+  --color-yellow: #FFC83D;
+  --color-fog: #F6F5F2;
+
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-hand: "Caveat", cursive;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
