@@ -1,5 +1,10 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/NotificationHub.Api/NotificationHub.Api.csproj" />
+    <Project Path="src/NotificationHub.Application/NotificationHub.Application.csproj" />
+    <Project Path="src/NotificationHub.Domain/NotificationHub.Domain.csproj" />
+    <Project Path="src/NotificationHub.Infrastructure/NotificationHub.Infrastructure.csproj" />
+    <Project Path="src/NotificationHub.Shared/NotificationHub.Shared.csproj" />
+    <Project Path="src/NotificationHub.Worker/NotificationHub.Worker.csproj" />
   </Folder>
 </Solution>
