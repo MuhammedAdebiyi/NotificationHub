@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Features.Notifications.Commands.CreateNotification;
@@ -5,7 +6,8 @@ using NotificationHub.Application.Features.Notifications.Commands.CreateNotifica
 namespace NotificationHub.Api.Controllers;
 
 [ApiController]
-[Route("api/notifications")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/notifications")]
 public class NotificationsController : ControllerBase
 {
     private readonly IMediator _mediator;
