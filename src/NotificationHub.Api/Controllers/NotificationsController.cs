@@ -2,7 +2,7 @@ using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Features.Notifications.Commands.CreateNotification;
-
+using NotificationHub.Application.Features.Notifications.Queries.GetNotificationById;
 namespace NotificationHub.Api.Controllers;
 
 [ApiController]
@@ -37,6 +37,16 @@ public class NotificationsController : ControllerBase
             return Conflict(new { error = result.Error });
 
         return Ok(new { publicId = result.Value });
+    }
+
+    [HttpGet("{publicId:guid}")]
+    public async Task<IActionResult> GetById(
+        Guid publicId,
+        CancellationToken cancellationToken)
+    {
+        var query = new GetNotificationByIdQuery(publicId);
+        var result = await _mediator.Send(query, cancellationToken);
+        return Ok(result.Value);
     }
 }
 

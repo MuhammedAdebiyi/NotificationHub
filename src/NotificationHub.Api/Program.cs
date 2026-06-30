@@ -5,7 +5,7 @@ using NotificationHub.Infrastructure.Persistence;
 using MediatR;
 using NotificationHub.Application.Behaviors;
 using NotificationHub.Infrastructure.DependencyInjection;
-
+using NotificationHub.Api.Middlewares;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,7 +40,7 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
-
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
