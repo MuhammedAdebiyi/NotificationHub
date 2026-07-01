@@ -7,6 +7,7 @@ public class RedisNotificationQueue : INotificationQueue
 {
     private readonly IDatabase _db;
     private const string QueueKey = "notification_queue";
+    private const string DlqKey = "notification_dlq";
 
     public RedisNotificationQueue(IConnectionMultiplexer redis)
     {
@@ -15,6 +16,9 @@ public class RedisNotificationQueue : INotificationQueue
 
     public async Task EnqueueAsync(Guid notificationId, CancellationToken cancellationToken = default)
         => await _db.ListLeftPushAsync(QueueKey, notificationId.ToString());
+
+    public async Task EnqueueDeadLetterAsync(Guid notificationId, CancellationToken cancellationToken = default)
+        => await _db.ListLeftPushAsync(DlqKey, notificationId.ToString());
 
     public async Task<Guid?> DequeueAsync(CancellationToken cancellationToken = default)
     {

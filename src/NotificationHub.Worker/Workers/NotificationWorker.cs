@@ -115,8 +115,8 @@ public class NotificationWorker : BackgroundService
             _logger.LogWarning(
                 "Notification {PublicId} exceeded max retries — moving to DLQ", notification.PublicId);
 
-            // Push to dead letter queue for manual ops replay
-            await queue.EnqueueAsync(notification.Id, stoppingToken);
+            
+            await queue.EnqueueDeadLetterAsync(notification.Id, stoppingToken);
             return;
         }
 
