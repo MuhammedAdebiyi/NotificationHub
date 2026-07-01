@@ -22,7 +22,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddInfrastructure();
+builder.Services.AddInfrastructure(builder.Configuration);
 
 // MediatR — scans Application assembly for IRequestHandler<> implementations
 builder.Services.AddMediatR(cfg =>
