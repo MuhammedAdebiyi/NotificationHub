@@ -4,13 +4,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Infrastructure.Auth;
+using NotificationHub.Infrastructure.Common;
 using NotificationHub.Infrastructure.Email.Providers;
 using NotificationHub.Infrastructure.Messaging.Providers;
 using NotificationHub.Infrastructure.Messaging.Redis;
 using NotificationHub.Infrastructure.Repositories;
+using NotificationHub.Shared.Abstractions;
 using StackExchange.Redis;
 using System.Text;
-
 
 namespace NotificationHub.Infrastructure.DependencyInjection;
 
@@ -24,13 +25,14 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
 
-        // Tokns
+        // Tokens
         services.AddScoped<IVerificationTokenRepository, VerificationTokenRepository>();
         services.AddScoped<ITokenGenerator, TokenGenerator>();
 
         // Auth services
         services.AddScoped<IPasswordHasher, Infrastructure.Auth.PasswordHasherService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddSingleton<IClock, SystemClock>();
 
         // Email provider
         services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();

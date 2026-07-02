@@ -1,4 +1,5 @@
 using MediatR;
+using NotificationHub.Application.Features.Auth.Commands.VerifyEmail;
 using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Features.Auth.Commands.Login;
 using NotificationHub.Application.Features.Auth.Commands.Signup;
@@ -56,6 +57,21 @@ public class AuthController : ControllerBase
         });
     }
 
+    [HttpGet("verify-email")]
+    public async Task<IActionResult> VerifyEmail([FromQuery] string token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+            return BadRequest(new { error = "Token is required." });
+
+        var command = new VerifyEmailCommand(token);
+        var result = await _mediator.Send(command);
+
+        if (!result.IsSuccess)
+            return BadRequest(new { error = result.Error });
+
+        return Ok(new { verified = true });
+    }
+    
     [HttpGet("me")]
     [Microsoft.AspNetCore.Authorization.Authorize]
     public IActionResult Me()

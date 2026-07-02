@@ -14,6 +14,7 @@ import Campaigns from '@/pages/Campaigns'
 import Analytics from '@/pages/Analytics'
 import Users from '@/pages/Users'
 import Settings from '@/pages/Settings'
+import VerifyEmail from '@/pages/VerifyEmail'
 
 export default function AppRouter() {
   return (
@@ -35,6 +36,7 @@ export default function AppRouter() {
         <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
         <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
         <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
