@@ -1,11 +1,16 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using NotificationHub.Application.Abstractions;
+using NotificationHub.Infrastructure.Auth;
 using NotificationHub.Infrastructure.Email.Providers;
 using NotificationHub.Infrastructure.Messaging.Providers;
 using NotificationHub.Infrastructure.Messaging.Redis;
 using NotificationHub.Infrastructure.Repositories;
 using StackExchange.Redis;
+using System.Text;
+
 
 namespace NotificationHub.Infrastructure.DependencyInjection;
 
@@ -17,11 +22,16 @@ public static class InfrastructureServiceExtensions
     {
         // Repositories
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<IUserRepository, UserRepository>();
 
-        // Email provider — HttpClient managed by IHttpClientFactory
+        // Auth services
+        services.AddScoped<IPasswordHasher, Infrastructure.Auth.PasswordHasherService>();
+        services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+
+        // Email provider
         services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();
 
-        // Notification provider — now receives IEmailProvider via DI
+        // Notification provider
         services.AddScoped<INotificationProvider, StubNotificationProvider>();
 
         // Redis
@@ -29,6 +39,28 @@ public static class InfrastructureServiceExtensions
         services.AddSingleton<IConnectionMultiplexer>(
             ConnectionMultiplexer.Connect(redisConnection));
         services.AddScoped<INotificationQueue, RedisNotificationQueue>();
+
+        // JWT auth
+        var jwtSecret = configuration["Jwt:Secret"]
+            ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
+
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(
+                        Encoding.UTF8.GetBytes(jwtSecret)),
+                    ValidateIssuer = true,
+                    ValidIssuer = configuration["Jwt:Issuer"] ?? "NotificationHub",
+                    ValidateAudience = true,
+                    ValidAudience = configuration["Jwt:Audience"] ?? "NotificationHub",
+                    ValidateLifetime = true,
+                };
+            });
+
+        services.AddAuthorization();
 
         return services;
     }
