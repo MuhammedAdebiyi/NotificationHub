@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import ProtectedRoute from '@/shared/components/ProtectedRoute'
 import Landing from '@/pages/Landing'
 import Login from '@/pages/Login'
 import Signup from '@/pages/Signup'
@@ -18,21 +19,23 @@ export default function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
+        {/* Public routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
 
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/notifications" element={<Notifications />} />
-        <Route path="/notifications/:id" element={<NotificationDetail />} />
-        <Route path="/templates" element={<Templates />} />
-        <Route path="/templates/:id" element={<TemplateEditor />} />
-        <Route path="/campaigns" element={<Campaigns />} />
-        <Route path="/analytics" element={<Analytics />} />
-        <Route path="/users" element={<Users />} />
-        <Route path="/settings" element={<Settings />} />
+        {/* Protected routes */}
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+        <Route path="/notifications/:id" element={<ProtectedRoute><NotificationDetail /></ProtectedRoute>} />
+        <Route path="/templates" element={<ProtectedRoute><Templates /></ProtectedRoute>} />
+        <Route path="/templates/:id" element={<ProtectedRoute><TemplateEditor /></ProtectedRoute>} />
+        <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
+        <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+        <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
       </Routes>
     </BrowserRouter>
   )

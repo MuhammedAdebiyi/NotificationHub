@@ -23,9 +23,7 @@ export interface ResetPasswordRequest {
 
 export interface AuthResponse {
   token: string
-  user: {
-    id: string
-    fullName: string
-    email: string
-  }
+  userId: string
+  email: string
+  fullName?: string
 }

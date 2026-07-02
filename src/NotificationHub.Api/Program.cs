@@ -6,9 +6,18 @@ using MediatR;
 using NotificationHub.Application.Behaviors;
 using NotificationHub.Infrastructure.DependencyInjection;
 using NotificationHub.Api.Middlewares;
-
+using NotificationHub.Application.Abstractions;
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 builder.Services.AddControllers();
 builder.Services.AddApiVersioning(options =>
 {
@@ -23,6 +32,9 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddInfrastructure(builder.Configuration);
+
+builder.Services.Configure<VerificationSettings>(
+    builder.Configuration.GetSection(VerificationSettings.SectionName));
 
 // MediatR — scans Application assembly for IRequestHandler<> implementations
 builder.Services.AddMediatR(cfg =>
@@ -42,6 +54,7 @@ if (app.Environment.IsDevelopment())
 }
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
+app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

@@ -9,14 +9,17 @@ import type {
 
 export const authApi = {
   login: (payload: LoginRequest) =>
-    apiClient.post<AuthResponse>('/api/auth/login', payload),
+    apiClient.post<AuthResponse>('/api/v1/auth/login', payload),
 
   signup: (payload: SignupRequest) =>
-    apiClient.post<AuthResponse>('/api/auth/signup', payload),
+    apiClient.post<AuthResponse>('/api/v1/auth/signup', payload),
+
+  me: () =>
+    apiClient.get<{ userId: string; email: string; fullName: string }>('/api/v1/auth/me'),
 
   forgotPassword: (payload: ForgotPasswordRequest) =>
-    apiClient.post<{ message: string }>('/api/auth/forgot-password', payload),
+    apiClient.post<{ message: string }>('/api/v1/auth/forgot-password', payload),
 
   resetPassword: (payload: ResetPasswordRequest) =>
-    apiClient.post<{ message: string }>('/api/auth/reset-password', payload),
+    apiClient.post<{ message: string }>('/api/v1/auth/reset-password', payload),
 }

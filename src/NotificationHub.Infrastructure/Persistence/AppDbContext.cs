@@ -15,6 +15,7 @@ public class AppDbContext : DbContext
     public DbSet<Template> Templates => Set<Template>();
     public DbSet<Campaign> Campaigns => Set<Campaign>();
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+    public DbSet<VerificationToken> VerificationTokens => Set<VerificationToken>();
     public DbSet<CampaignRecipient> CampaignRecipients => Set<CampaignRecipient>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+using NotificationHub.Infrastructure.Auth;
 
 namespace NotificationHub.Infrastructure.Auth;
 
@@ -6,12 +6,7 @@ public static class ApiKeyGenerator
 {
     public static string Generate()
     {
-        var randomBytes = RandomNumberGenerator.GetBytes(32);
-        var token = Convert.ToBase64String(randomBytes)
-            .Replace("+", "")
-            .Replace("/", "")
-            .Replace("=", "")[..32];
-
+        var token = RandomTokenGenerator.Generate(32);
         return $"nhub_live_{token}";
     }
 

@@ -31,6 +31,21 @@ public class NotificationRepository : INotificationRepository
     public async Task AddIdempotencyKeyAsync(IdempotencyKey key, CancellationToken cancellationToken = default)
         => await _context.IdempotencyKeys.AddAsync(key, cancellationToken);
 
+    public async Task<(IReadOnlyList<Notification> Items, int TotalCount)> GetPagedAsync(
+        int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var query = _context.Notifications.OrderByDescending(n => n.CreatedAt);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
         => await _context.SaveChangesAsync(cancellationToken);
 }

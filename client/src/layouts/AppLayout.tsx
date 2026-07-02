@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { authService } from '@/shared/services/auth.service'
 
 const navItems = [
   { to: '/dashboard', label: 'Dashboard' },
@@ -12,6 +13,13 @@ const navItems = [
 ]
 
 export default function AppLayout({ children }: { children: ReactNode }) {
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    authService.clearToken()
+    navigate('/login')
+  }
+
   return (
     <div className="min-h-screen bg-paper text-ink flex">
       <aside className="w-64 shrink-0 border-r border-ink/10 bg-fog/40 flex flex-col">
@@ -39,8 +47,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        <div className="px-6 py-5 border-t border-ink/10">
+        <div className="px-4 py-5 border-t border-ink/10 space-y-3">
           <span className="text-xs font-medium px-3 py-1.5 rounded-full bg-teal/10 text-teal">● Live</span>
+          <button
+            onClick={handleLogout}
+            className="w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium text-ink/60 hover:bg-fog hover:text-coral transition"
+          >
+            Log out
+          </button>
         </div>
       </aside>
 

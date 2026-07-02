@@ -24,6 +24,10 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
 
+        // Tokns
+        services.AddScoped<IVerificationTokenRepository, VerificationTokenRepository>();
+        services.AddScoped<ITokenGenerator, TokenGenerator>();
+
         // Auth services
         services.AddScoped<IPasswordHasher, Infrastructure.Auth.PasswordHasherService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();

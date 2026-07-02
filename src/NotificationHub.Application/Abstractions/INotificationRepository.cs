@@ -9,5 +9,7 @@ public interface INotificationRepository
     Task<Notification?> GetByPublicIdAsync(Guid publicId, CancellationToken cancellationToken = default);
     Task<bool> IdempotencyKeyExistsAsync(string key, CancellationToken cancellationToken = default);
     Task AddIdempotencyKeyAsync(IdempotencyKey key, CancellationToken cancellationToken = default);
+    Task<(IReadOnlyList<Domain.Entities.Notification> Items, int TotalCount)> GetPagedAsync(
+    int page, int pageSize, CancellationToken cancellationToken = default);
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

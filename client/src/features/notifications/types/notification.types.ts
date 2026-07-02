@@ -1,5 +1,5 @@
 export type NotificationStatus = 'Pending' | 'Processing' | 'Sent' | 'Failed' | 'Retrying' | 'DeadLetter'
-export type NotificationChannel = 'Email' | 'SMS' | 'Push' | 'InApp'
+export type NotificationChannel = 'Email' | 'Sms' | 'Push' | 'InApp'
 
 export interface Notification {
   id: string
@@ -8,15 +8,12 @@ export interface Notification {
   type: string
   channel: NotificationChannel
   status: NotificationStatus
+  retryCount: number
   createdAt: string
 }
 
 export interface NotificationDetail extends Notification {
-  recipient: string
-  template: string
-  provider: string
-  retries: number
-  payload: Record<string, unknown>
+  payload: string
   logs: NotificationLog[]
 }
 
