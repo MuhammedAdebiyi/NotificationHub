@@ -33,6 +33,8 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IPasswordHasher, Infrastructure.Auth.PasswordHasherService>();
         services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
         services.AddSingleton<IClock, SystemClock>();
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUser, CurrentUser>();
 
         // Email provider
         services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();

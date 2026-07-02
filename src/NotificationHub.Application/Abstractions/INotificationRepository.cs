@@ -10,6 +10,6 @@ public interface INotificationRepository
     Task<bool> IdempotencyKeyExistsAsync(string key, CancellationToken cancellationToken = default);
     Task AddIdempotencyKeyAsync(IdempotencyKey key, CancellationToken cancellationToken = default);
     Task<(IReadOnlyList<Domain.Entities.Notification> Items, int TotalCount)> GetPagedAsync(
-    int page, int pageSize, CancellationToken cancellationToken = default);
+    int page, int pageSize, Guid? userId = null, CancellationToken cancellationToken = default);
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }

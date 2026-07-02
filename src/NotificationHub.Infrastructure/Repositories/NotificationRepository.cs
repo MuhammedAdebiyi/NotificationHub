@@ -32,12 +32,16 @@ public class NotificationRepository : INotificationRepository
         => await _context.IdempotencyKeys.AddAsync(key, cancellationToken);
 
     public async Task<(IReadOnlyList<Notification> Items, int TotalCount)> GetPagedAsync(
-        int page, int pageSize, CancellationToken cancellationToken = default)
+    int page, int pageSize, Guid? userId = null, CancellationToken cancellationToken = default)
     {
-        var query = _context.Notifications.OrderByDescending(n => n.CreatedAt);
+        var query = _context.Notifications.AsQueryable();
+
+        if (userId.HasValue)
+            query = query.Where(n => n.UserId == userId.Value);
+
+        query = query.OrderByDescending(n => n.CreatedAt);
 
         var totalCount = await query.CountAsync(cancellationToken);
-
         var items = await query
             .Skip((page - 1) * pageSize)
             .Take(pageSize)

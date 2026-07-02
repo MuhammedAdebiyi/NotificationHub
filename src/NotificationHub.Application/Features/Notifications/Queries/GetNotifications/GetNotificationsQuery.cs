@@ -5,6 +5,8 @@ namespace NotificationHub.Application.Features.Notifications.Queries.GetNotifica
 
 public record GetNotificationsQuery(int Page = 1, int PageSize = 20)
     : IRequest<Result<GetNotificationsResult>>;
+public record GetNotificationsQuery(Guid? UserId, int Page = 1, int PageSize = 20)
+    : IRequest<Result<GetNotificationsResult>>;
 
 public record GetNotificationsResult(
     IReadOnlyList<NotificationListItemDto> Items,
