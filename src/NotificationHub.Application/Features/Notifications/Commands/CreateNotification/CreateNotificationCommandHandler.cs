@@ -9,54 +9,50 @@ public class CreateNotificationCommandHandler
     : IRequestHandler<CreateNotificationCommand, Result<Guid>>
 {
     private readonly INotificationRepository _repository;
-    private readonly INotificationQueue _queue;
-    private readonly ICurrentOrganization _currentOrganization;
 
-    public CreateNotificationCommandHandler(
-        INotificationRepository repository,
-        INotificationQueue queue,
-        ICurrentOrganization currentOrganization)
+    public CreateNotificationCommandHandler(INotificationRepository repository)
     {
         _repository = repository;
-        _queue = queue;
-        _currentOrganization = currentOrganization;
     }
 
     public async Task<Result<Guid>> Handle(
         CreateNotificationCommand request,
         CancellationToken cancellationToken)
     {
-        if (_currentOrganization.OrganizationId is null)
-            return Result<Guid>.Failure("Organization context is missing.");
-
-        var orgId = _currentOrganization.OrganizationId.Value;
-
-        if (!string.IsNullOrWhiteSpace(request.IdempotencyKey))
+        // Idempotency check
+        if (!string.IsNullOrEmpty(request.IdempotencyKey))
         {
             var exists = await _repository.IdempotencyKeyExistsAsync(
-                request.IdempotencyKey, orgId, cancellationToken);
+                request.OrganizationId, request.IdempotencyKey, cancellationToken);
 
             if (exists)
                 return Result<Guid>.Failure("Duplicate request: idempotency key already used.");
-
-            await _repository.AddIdempotencyKeyAsync(
-                new IdempotencyKey { OrganizationId = orgId, Key = request.IdempotencyKey },
-                cancellationToken);
         }
 
         var notification = new Notification
         {
-            OrganizationId = orgId,
+            OrganizationId = request.OrganizationId,
             RecipientEmail = request.RecipientEmail,
-            Type           = request.Type,
-            Channel        = request.Channel,
-            Payload        = request.Payload,
+            Type = request.Type,
+            Channel = request.Channel,
+            Payload = request.Payload,
         };
 
         await _repository.AddAsync(notification, cancellationToken);
+
+        if (!string.IsNullOrEmpty(request.IdempotencyKey))
+        {
+            await _repository.AddIdempotencyKeyAsync(new IdempotencyKey
+            {
+                OrganizationId = request.OrganizationId,
+                Key = request.IdempotencyKey,
+            }, cancellationToken);
+        }
+
         await _repository.SaveChangesAsync(cancellationToken);
 
-        await _queue.EnqueueAsync(notification.Id, cancellationToken);
+        // TODO: push to Redis queue (Phase 2 — worker wiring)
+        // await _queue.EnqueueAsync(notification.Id, cancellationToken);
 
         return Result<Guid>.Success(notification.PublicId);
     }

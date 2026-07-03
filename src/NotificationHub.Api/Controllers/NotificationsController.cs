@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Features.Notifications.Commands.CreateNotification;
 using NotificationHub.Application.Features.Notifications.Queries.GetNotificationById;
 using NotificationHub.Application.Features.Notifications.Queries.GetNotifications;
+using NotificationHub.Shared.Abstractions;
 
 namespace NotificationHub.Api.Controllers;
 
@@ -13,10 +14,12 @@ namespace NotificationHub.Api.Controllers;
 public class NotificationsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ICurrentOrganization _currentOrg;
 
-    public NotificationsController(IMediator mediator)
+    public NotificationsController(IMediator mediator, ICurrentOrganization currentOrg)
     {
         _mediator = mediator;
+        _currentOrg = currentOrg;
     }
 
     [HttpPost]
@@ -25,7 +28,11 @@ public class NotificationsController : ControllerBase
         [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
         CancellationToken cancellationToken)
     {
+        if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context. Use JWT or X-Api-Key." });
+
         var command = new CreateNotificationCommand(
+            _currentOrg.OrganizationId.Value,
             request.RecipientEmail,
             request.Type,
             request.Channel,
@@ -47,11 +54,13 @@ public class NotificationsController : ControllerBase
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var query = new GetNotificationsQuery(page, pageSize);
-        var result = await _mediator.Send(query, cancellationToken);
+        if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
 
-        if (!result.IsSuccess)
-            return BadRequest(new { error = result.Error });
+        var query = new GetNotificationsQuery(
+            _currentOrg.OrganizationId.Value, page, pageSize);
+
+        var result = await _mediator.Send(query, cancellationToken);
 
         return Ok(new
         {
@@ -67,8 +76,17 @@ public class NotificationsController : ControllerBase
         Guid publicId,
         CancellationToken cancellationToken)
     {
-        var query = new GetNotificationByIdQuery(publicId);
+        if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        var query = new GetNotificationByIdQuery(
+            _currentOrg.OrganizationId.Value, publicId);
+
         var result = await _mediator.Send(query, cancellationToken);
+
+        if (!result.IsSuccess)
+            return NotFound(new { error = result.Error });
+
         return Ok(result.Value);
     }
 }

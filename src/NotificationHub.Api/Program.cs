@@ -6,6 +6,7 @@ using MediatR;
 using NotificationHub.Application.Behaviors;
 using NotificationHub.Infrastructure.DependencyInjection;
 using NotificationHub.Api.Middlewares;
+using NotificationHub.Infrastructure.Auth;
 using NotificationHub.Application.Abstractions;
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,6 +57,9 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
+app.UseAuthentication();
+app.UseMiddleware<ApiKeyMiddleware>();
+app.UseAuthorization();
 app.UseAuthorization();
 app.MapControllers();
 

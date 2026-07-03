@@ -37,6 +37,9 @@ public static class InfrastructureServiceExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<ICurrentOrganization, CurrentOrganization>();       
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentOrganization, CurrentOrganization>();
+        services.AddScoped<IClock, SystemClock>();
 
         // Template Repository
         services.AddScoped<ITemplateRepository, TemplateRepository>();
