@@ -3,6 +3,8 @@ using NotificationHub.Application.Features.Auth.Commands.VerifyEmail;
 using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Features.Auth.Commands.Login;
 using NotificationHub.Application.Features.Auth.Commands.Signup;
+using NotificationHub.Application.Features.Auth.Commands.ForgotPassword;
+using NotificationHub.Application.Features.Auth.Commands.ResetPassword;
 
 namespace NotificationHub.Api.Controllers;
 
@@ -72,6 +74,27 @@ public class AuthController : ControllerBase
         return Ok(new { verified = true });
     }
     
+    [HttpPost("forgot-password")]
+    public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+    {
+        var command = new ForgotPasswordCommand(request.Email);
+        var result = await _mediator.Send(command);
+        // Always 200 — never reveal whether email exists
+        return Ok(new { message = "If that email exists, a reset link has been sent." });
+    }
+
+    [HttpPost("reset-password")]
+    public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+    {
+        var command = new ResetPasswordCommand(request.Token, request.Password, request.ConfirmPassword);
+        var result = await _mediator.Send(command);
+
+        if (!result.IsSuccess)
+            return BadRequest(new { error = result.Error });
+
+        return Ok(new { message = "Password reset successfully." });
+    }
+
     [HttpGet("me")]
     [Microsoft.AspNetCore.Authorization.Authorize]
     public IActionResult Me()
@@ -86,3 +109,5 @@ public class AuthController : ControllerBase
 
 public record SignupRequest(string FullName, string Email, string Password, string ConfirmPassword);
 public record LoginRequest(string Email, string Password);
+public record ForgotPasswordRequest(string Email);
+public record ResetPasswordRequest(string Token, string Password, string ConfirmPassword);

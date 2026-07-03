@@ -2,52 +2,24 @@ using Asp.Versioning;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Features.Notifications.Commands.CreateNotification;
-using NotificationHub.Application.Features.Notifications.Queries.GetNotifications;
 using NotificationHub.Application.Features.Notifications.Queries.GetNotificationById;
+using NotificationHub.Application.Features.Notifications.Queries.GetNotifications;
 using NotificationHub.Shared.Abstractions;
-namespace NotificationHub.Api.Controllers;
 
+namespace NotificationHub.Api.Controllers;
 
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/notifications")]
-
-private readonly IMediator _mediator;
-private readonly ICurrentUser _currentUser;
-
-public NotificationsController(IMediator mediator, ICurrentUser currentUser)
-{
-    _mediator = mediator;
-    _currentUser = currentUser;
-}
-
-[HttpGet]
-public async Task<IActionResult> GetAll(
-    [FromQuery] int page = 1,
-    [FromQuery] int pageSize = 20,
-    CancellationToken cancellationToken = default)
-{
-    var query = new GetNotificationsQuery(_currentUser.UserId, page, pageSize);
-    var result = await _mediator.Send(query, cancellationToken);
-
-    if (!result.IsSuccess)
-        return BadRequest(new { error = result.Error });
-
-    return Ok(new
-    {
-        items = result.Value!.Items,
-        totalCount = result.Value.TotalCount,
-        pageNumber = result.Value.PageNumber,
-        pageSize = result.Value.PageSize
-    });
-}
 public class NotificationsController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly ICurrentUser _currentUser;
 
-    public NotificationsController(IMediator mediator)
+    public NotificationsController(IMediator mediator, ICurrentUser currentUser)
     {
         _mediator = mediator;
+        _currentUser = currentUser;
     }
 
     [HttpPost]
@@ -78,7 +50,7 @@ public class NotificationsController : ControllerBase
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var query = new GetNotificationsQuery(page, pageSize);
+        var query = new GetNotificationsQuery(_currentUser.UserId, page, pageSize);
         var result = await _mediator.Send(query, cancellationToken);
 
         if (!result.IsSuccess)
@@ -92,7 +64,7 @@ public class NotificationsController : ControllerBase
             pageSize = result.Value.PageSize
         });
     }
-    
+
     [HttpGet("{publicId:guid}")]
     public async Task<IActionResult> GetById(
         Guid publicId,

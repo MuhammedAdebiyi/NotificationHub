@@ -35,6 +35,7 @@ public static class InfrastructureServiceExtensions
         services.AddSingleton<IClock, SystemClock>();
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
+        services.AddScoped<IVerificationTokenRepository, VerificationTokenRepository>();
 
         // Email provider
         services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();
