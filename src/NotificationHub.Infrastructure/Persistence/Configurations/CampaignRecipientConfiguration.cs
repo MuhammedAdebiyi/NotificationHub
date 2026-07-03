@@ -10,11 +10,13 @@ public class CampaignRecipientConfiguration : IEntityTypeConfiguration<CampaignR
     {
         builder.HasKey(r => r.Id);
 
-        builder.HasIndex(r => new { r.CampaignId, r.UserId }).IsUnique(); // one row per user per campaign
+        builder.Property(r => r.RecipientEmail).IsRequired().HasMaxLength(320);
 
-        builder.HasOne(r => r.User)
-            .WithMany()
-            .HasForeignKey(r => r.UserId);
+        builder.HasIndex(r => new { r.CampaignId, r.RecipientEmail }).IsUnique();
+
+        builder.HasOne(r => r.Campaign)
+            .WithMany(c => c.Recipients)
+            .HasForeignKey(r => r.CampaignId);
 
         builder.HasOne(r => r.Notification)
             .WithMany()

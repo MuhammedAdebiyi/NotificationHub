@@ -15,8 +15,8 @@ public class ApiKeyConfiguration : IEntityTypeConfiguration<ApiKey>
 
         builder.HasIndex(k => k.KeyHash).IsUnique();
 
-        builder.HasOne(k => k.CreatedBy)
-            .WithMany()
-            .HasForeignKey(k => k.CreatedByUserId);
+        builder.HasOne(k => k.Organization)
+            .WithMany(o => o.ApiKeys)
+            .HasForeignKey(k => k.OrganizationId);
     }
 }
