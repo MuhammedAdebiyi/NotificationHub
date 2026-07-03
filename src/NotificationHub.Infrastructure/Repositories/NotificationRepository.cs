@@ -20,26 +20,23 @@ public class NotificationRepository : INotificationRepository
     public async Task<Notification?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         => await _context.Notifications.FindAsync([id], cancellationToken);
 
-    public async Task<Notification?> GetByPublicIdAsync(Guid publicId, CancellationToken cancellationToken = default)
+    public async Task<Notification?> GetByPublicIdAsync(Guid publicId, Guid organizationId, CancellationToken cancellationToken = default)
         => await _context.Notifications
-            .FirstOrDefaultAsync(n => n.PublicId == publicId, cancellationToken);
+            .FirstOrDefaultAsync(n => n.PublicId == publicId && n.OrganizationId == organizationId, cancellationToken);
 
-    public async Task<bool> IdempotencyKeyExistsAsync(string key, CancellationToken cancellationToken = default)
+    public async Task<bool> IdempotencyKeyExistsAsync(string key, Guid organizationId, CancellationToken cancellationToken = default)
         => await _context.IdempotencyKeys
-            .AnyAsync(k => k.Key == key, cancellationToken);
+            .AnyAsync(k => k.Key == key && k.OrganizationId == organizationId, cancellationToken);
 
-    public async Task AddIdempotencyKeyAsync(IdempotencyKey key, CancellationToken cancellationToken = default)
-        => await _context.IdempotencyKeys.AddAsync(key, cancellationToken);
+    public async Task AddIdempotencyKeyAsync(IdempotencyKey idempotencyKey, CancellationToken cancellationToken = default)
+        => await _context.IdempotencyKeys.AddAsync(idempotencyKey, cancellationToken);
 
     public async Task<(IReadOnlyList<Notification> Items, int TotalCount)> GetPagedAsync(
-    int page, int pageSize, Guid? userId = null, CancellationToken cancellationToken = default)
+        Guid organizationId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
-        var query = _context.Notifications.AsQueryable();
-
-        if (userId.HasValue)
-            query = query.Where(n => n.UserId == userId.Value);
-
-        query = query.OrderByDescending(n => n.CreatedAt);
+        var query = _context.Notifications
+            .Where(n => n.OrganizationId == organizationId)
+            .OrderByDescending(n => n.CreatedAt);
 
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query

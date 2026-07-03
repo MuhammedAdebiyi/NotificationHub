@@ -7,7 +7,13 @@ public record SignupCommand(
     string FullName,
     string Email,
     string Password,
-    string ConfirmPassword
+    string ConfirmPassword,
+    string OrgName
 ) : IRequest<Result<SignupResult>>;
 
-public record SignupResult(string Token, Guid UserId, string Email);
+public record SignupResult(
+    string Token,
+    Guid UserId,
+    Guid OrganizationId,
+    string Email
+);

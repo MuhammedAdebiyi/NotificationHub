@@ -7,7 +7,7 @@ public record GetNotificationByIdQuery(Guid PublicId) : IRequest<Result<Notifica
 
 public record NotificationDto(
     Guid PublicId,
-    Guid UserId,
+    string RecipientEmail,
     string Type,
     string Channel,
     string Status,

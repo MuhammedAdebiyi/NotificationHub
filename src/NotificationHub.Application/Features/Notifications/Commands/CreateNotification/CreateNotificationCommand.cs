@@ -5,9 +5,9 @@ using NotificationHub.Shared.Abstractions;
 namespace NotificationHub.Application.Features.Notifications.Commands.CreateNotification;
 
 public record CreateNotificationCommand(
-    Guid UserId,
+    string RecipientEmail,
     string Type,
     NotificationChannel Channel,
     string Payload,
-    string? IdempotencyKey
+    string? IdempotencyKey = null
 ) : IRequest<Result<Guid>>;

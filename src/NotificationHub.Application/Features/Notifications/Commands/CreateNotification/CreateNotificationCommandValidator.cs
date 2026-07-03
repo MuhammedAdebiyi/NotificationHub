@@ -6,8 +6,9 @@ public class CreateNotificationCommandValidator : AbstractValidator<CreateNotifi
 {
     public CreateNotificationCommandValidator()
     {
-        RuleFor(x => x.UserId)
-            .NotEmpty().WithMessage("UserId is required.");
+        RuleFor(x => x.RecipientEmail)
+            .NotEmpty().WithMessage("RecipientEmail is required.")
+            .EmailAddress().WithMessage("RecipientEmail must be a valid email address.");
 
         RuleFor(x => x.Type)
             .NotEmpty().WithMessage("Notification type is required.")

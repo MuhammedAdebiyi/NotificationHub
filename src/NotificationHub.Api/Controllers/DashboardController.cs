@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NotificationHub.Domain.Enums;
 using NotificationHub.Infrastructure.Persistence;
-using NotificationHub.Shared.Abstractions;
 using StackExchange.Redis;
 
 namespace NotificationHub.Api.Controllers;
@@ -17,45 +16,34 @@ public class DashboardController : ControllerBase
 {
     private readonly AppDbContext _context;
     private readonly IConnectionMultiplexer _redis;
-    private readonly ICurrentUser _currentUser;
 
-    public DashboardController(
-        AppDbContext context,
-        IConnectionMultiplexer redis,
-        ICurrentUser currentUser)
+    public DashboardController(AppDbContext context, IConnectionMultiplexer redis)
     {
         _context = context;
         _redis = redis;
-        _currentUser = currentUser;
     }
 
     [HttpGet("stats")]
     public async Task<IActionResult> GetStats(CancellationToken cancellationToken)
     {
-        var userId = _currentUser.UserId;
-
-        var query = _context.Notifications.AsQueryable();
-        if (userId.HasValue)
-            query = query.Where(n => n.UserId == userId.Value);
-
-        var totalSent = await query
+        var totalSent = await _context.Notifications
             .CountAsync(n => n.Status == NotificationStatus.Sent, cancellationToken);
 
-        var pending = await query
+        var pending = await _context.Notifications
             .CountAsync(n => n.Status == NotificationStatus.Pending, cancellationToken);
 
-        var failed = await query
+        var failed = await _context.Notifications
             .CountAsync(n => n.Status == NotificationStatus.Failed ||
                              n.Status == NotificationStatus.DeadLetter, cancellationToken);
 
-        var total = await query.CountAsync(cancellationToken);
+        var total = await _context.Notifications.CountAsync(cancellationToken);
         var successRate = total == 0 ? 0.0 : Math.Round((double)totalSent / total * 100, 1);
 
         var db = _redis.GetDatabase();
         var queueLength = await db.ListLengthAsync("notification_queue");
 
         var activeUsers = await _context.Users
-            .CountAsync(u => !u.IsDeleted, cancellationToken);
+            .CountAsync(u => u.DeletedAt == null, cancellationToken);
 
         return Ok(new
         {
@@ -71,13 +59,7 @@ public class DashboardController : ControllerBase
     [HttpGet("activity")]
     public async Task<IActionResult> GetActivity(CancellationToken cancellationToken)
     {
-        var userId = _currentUser.UserId;
-
-        var query = _context.Notifications.AsQueryable();
-        if (userId.HasValue)
-            query = query.Where(n => n.UserId == userId.Value);
-
-        var activity = await query
+        var activity = await _context.Notifications
             .OrderByDescending(n => n.CreatedAt)
             .Take(10)
             .Select(n => new

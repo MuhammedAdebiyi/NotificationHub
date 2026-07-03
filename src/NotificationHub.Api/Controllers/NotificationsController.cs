@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Features.Notifications.Commands.CreateNotification;
 using NotificationHub.Application.Features.Notifications.Queries.GetNotificationById;
 using NotificationHub.Application.Features.Notifications.Queries.GetNotifications;
-using NotificationHub.Shared.Abstractions;
 
 namespace NotificationHub.Api.Controllers;
 
@@ -14,12 +13,10 @@ namespace NotificationHub.Api.Controllers;
 public class NotificationsController : ControllerBase
 {
     private readonly IMediator _mediator;
-    private readonly ICurrentUser _currentUser;
 
-    public NotificationsController(IMediator mediator, ICurrentUser currentUser)
+    public NotificationsController(IMediator mediator)
     {
         _mediator = mediator;
-        _currentUser = currentUser;
     }
 
     [HttpPost]
@@ -29,7 +26,7 @@ public class NotificationsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var command = new CreateNotificationCommand(
-            request.UserId,
+            request.RecipientEmail,
             request.Type,
             request.Channel,
             request.Payload,
@@ -50,7 +47,7 @@ public class NotificationsController : ControllerBase
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        var query = new GetNotificationsQuery(_currentUser.UserId, page, pageSize);
+        var query = new GetNotificationsQuery(page, pageSize);
         var result = await _mediator.Send(query, cancellationToken);
 
         if (!result.IsSuccess)
@@ -77,7 +74,7 @@ public class NotificationsController : ControllerBase
 }
 
 public record CreateNotificationRequest(
-    Guid UserId,
+    string RecipientEmail,
     string Type,
     NotificationHub.Domain.Enums.NotificationChannel Channel,
     string Payload

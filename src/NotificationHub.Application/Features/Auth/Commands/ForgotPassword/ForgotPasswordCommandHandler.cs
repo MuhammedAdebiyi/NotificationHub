@@ -53,7 +53,8 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
             <p>Click the link below to reset your password. This link expires in 1 hour.</p>
             <p><a href="{resetLink}">Reset Password</a></p>
             <p>If you didn't request this, ignore this email.</p>
-        """
+        """,
+        Text: $"Hi {user.FullName}, reset your password here: {resetLink} (expires in 1 hour)"
     ), cancellationToken);
 
         return Result<bool>.Success(true);

@@ -8,8 +8,7 @@ public class User : AuditableEntity
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public bool IsEmailVerified { get; set; }
-    public ICollection<VerificationToken> VerificationTokens { get; set; } = new List<VerificationToken>();
 
-    public UserPreference? Preferences { get; set; }
-    public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+    public ICollection<OrganizationMember> Memberships { get; set; } = new List<OrganizationMember>();
+    public ICollection<VerificationToken> VerificationTokens { get; set; } = new List<VerificationToken>();
 }

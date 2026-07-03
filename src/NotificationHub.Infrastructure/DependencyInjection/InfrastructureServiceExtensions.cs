@@ -24,6 +24,7 @@ public static class InfrastructureServiceExtensions
         // Repositories
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IOrganizationRepository, OrganizationRepository>();  // ← new
 
         // Tokens
         services.AddScoped<IVerificationTokenRepository, VerificationTokenRepository>();
@@ -35,7 +36,10 @@ public static class InfrastructureServiceExtensions
         services.AddSingleton<IClock, SystemClock>();
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
-        services.AddScoped<IVerificationTokenRepository, VerificationTokenRepository>();
+        services.AddScoped<ICurrentOrganization, CurrentOrganization>();       
+
+        // Template Repository
+        services.AddScoped<ITemplateRepository, TemplateRepository>();
 
         // Email provider
         services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();

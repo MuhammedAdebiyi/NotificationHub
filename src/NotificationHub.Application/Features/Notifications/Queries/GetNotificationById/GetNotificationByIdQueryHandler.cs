@@ -2,6 +2,7 @@ using MediatR;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Shared.Abstractions;
 using NotificationHub.Shared.Exceptions;
+using NotificationHub.Domain.Entities; 
 
 namespace NotificationHub.Application.Features.Notifications.Queries.GetNotificationById;
 
@@ -9,32 +10,40 @@ public class GetNotificationByIdQueryHandler
     : IRequestHandler<GetNotificationByIdQuery, Result<NotificationDto>>
 {
     private readonly INotificationRepository _repository;
+    private readonly ICurrentOrganization _currentOrganization;
 
-    public GetNotificationByIdQueryHandler(INotificationRepository repository)
+    public GetNotificationByIdQueryHandler(
+        INotificationRepository repository,
+        ICurrentOrganization currentOrganization)
     {
         _repository = repository;
+        _currentOrganization = currentOrganization;
     }
 
     public async Task<Result<NotificationDto>> Handle(
         GetNotificationByIdQuery request,
         CancellationToken cancellationToken)
     {
-        var notification = await _repository.GetByPublicIdAsync(request.PublicId, cancellationToken);
+        if (_currentOrganization.OrganizationId is null)
+            return Result<NotificationDto>.Failure("Organization context is missing.");
+
+        var orgId = _currentOrganization.OrganizationId.Value;
+
+        var notification = await _repository.GetByPublicIdAsync(
+            orgId, request.PublicId, cancellationToken);
 
         if (notification is null)
-            throw new NotFoundException(nameof(notification), request.PublicId);
+            throw new NotFoundException(nameof(Notification), request.PublicId);
 
-        var dto = new NotificationDto(
+        return Result<NotificationDto>.Success(new NotificationDto(
             notification.PublicId,
-            notification.UserId,
+            notification.RecipientEmail,
             notification.Type,
             notification.Channel.ToString(),
             notification.Status.ToString(),
             notification.Payload,
             notification.RetryCount,
             notification.CreatedAt
-        );
-
-        return Result<NotificationDto>.Success(dto);
+        ));
     }
 }
