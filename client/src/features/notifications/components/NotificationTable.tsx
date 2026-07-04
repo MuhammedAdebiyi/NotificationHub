@@ -19,6 +19,7 @@ export default function NotificationTable({ notifications }: { notifications: No
         <thead>
           <tr className="border-b border-ink/10 text-left text-ink/50 text-xs uppercase tracking-wide">
             <th className="pb-3 pr-4 font-medium">ID</th>
+            <th className="pb-3 pr-4 font-medium">Recipient</th>
             <th className="pb-3 pr-4 font-medium">Type</th>
             <th className="pb-3 pr-4 font-medium">Channel</th>
             <th className="pb-3 pr-4 font-medium">Status</th>
@@ -28,13 +29,14 @@ export default function NotificationTable({ notifications }: { notifications: No
         <tbody>
           {notifications.map((n) => (
             <tr
-              key={n.id}
+              key={n.publicId}
               onClick={() => navigate(`/notifications/${n.publicId}`)}
               className="border-b border-ink/5 hover:bg-fog/50 cursor-pointer transition"
             >
               <td className="py-3 pr-4 font-mono text-xs text-ink/40">
                 {n.publicId.slice(0, 8)}...
               </td>
+              <td className="py-3 pr-4 text-ink/60 text-xs">{n.recipientEmail}</td>
               <td className="py-3 pr-4 font-medium">{n.type}</td>
               <td className="py-3 pr-4 text-ink/60">{n.channel}</td>
               <td className="py-3 pr-4">
