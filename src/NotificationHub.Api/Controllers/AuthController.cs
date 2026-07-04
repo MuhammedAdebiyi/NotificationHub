@@ -54,6 +54,7 @@ public class AuthController : ControllerBase
         {
             token = result.Value!.Token,
             userId = result.Value.UserId,
+            organizationId = result.Value.OrganizationId,
             email = result.Value.Email,
             fullName = result.Value.FullName
         });
