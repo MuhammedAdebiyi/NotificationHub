@@ -70,8 +70,14 @@ public class SignupCommandHandler : IRequestHandler<SignupCommand, Result<Signup
         // 4. Persist everything
         await _userRepository.SaveChangesAsync(cancellationToken);
 
-        // 5. Generate JWT with org context
-        var token = _jwtTokenGenerator.Generate(user, organization.Id, "owner");
+        try
+        {
+            await _mediator.Send(new SendVerificationEmailCommand(user.Id), cancellationToken);
+        }
+        catch
+        {
+            // Signup must not fail because email delivery failed.
+        }
 
         // 6. Fire verification email — swallowed intentionally
         try
@@ -85,7 +91,7 @@ public class SignupCommandHandler : IRequestHandler<SignupCommand, Result<Signup
         }
 
         return Result<SignupResult>.Success(
-            new SignupResult(token, user.Id, organization.Id, user.Email));
+            new SignupResult(user.Id, user.Email));
     }
 
     private static string GenerateSlug(string name)

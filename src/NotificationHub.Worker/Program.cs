@@ -1,9 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using NotificationHub.Infrastructure.DependencyInjection;
 using NotificationHub.Infrastructure.Persistence;
 using NotificationHub.Worker.Workers;
 
 var builder = Host.CreateApplicationBuilder(args);
+
+builder.Logging.SetMinimumLevel(LogLevel.Debug);
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));

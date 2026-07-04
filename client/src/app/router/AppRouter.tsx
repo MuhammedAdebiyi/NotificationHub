@@ -38,6 +38,7 @@ export default function AppRouter() {
         <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        
       </Routes>
     </BrowserRouter>
   )

@@ -9,17 +9,20 @@ public class CreateNotificationCommandHandler
     : IRequestHandler<CreateNotificationCommand, Result<Guid>>
 {
     private readonly INotificationRepository _repository;
+    private readonly INotificationQueue _queue;
 
-    public CreateNotificationCommandHandler(INotificationRepository repository)
+    public CreateNotificationCommandHandler(
+        INotificationRepository repository,
+        INotificationQueue queue)
     {
         _repository = repository;
+        _queue = queue;
     }
 
     public async Task<Result<Guid>> Handle(
         CreateNotificationCommand request,
         CancellationToken cancellationToken)
     {
-        // Idempotency check
         if (!string.IsNullOrEmpty(request.IdempotencyKey))
         {
             var exists = await _repository.IdempotencyKeyExistsAsync(
@@ -51,8 +54,8 @@ public class CreateNotificationCommandHandler
 
         await _repository.SaveChangesAsync(cancellationToken);
 
-        // TODO: push to Redis queue (Phase 2 — worker wiring)
-        // await _queue.EnqueueAsync(notification.Id, cancellationToken);
+        // Push to Redis queue for async processing
+        await _queue.EnqueueAsync(notification.Id, cancellationToken);
 
         return Result<Guid>.Success(notification.PublicId);
     }

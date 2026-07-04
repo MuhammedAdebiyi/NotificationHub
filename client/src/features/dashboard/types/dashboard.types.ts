@@ -10,5 +10,7 @@ export interface DashboardStats {
 export interface ActivityItem {
   id: string
   label: string
+  channel: string
+  status: string
   timestamp: string
-}   
+}

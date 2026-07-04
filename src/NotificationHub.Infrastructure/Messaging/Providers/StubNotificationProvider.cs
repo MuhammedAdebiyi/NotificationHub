@@ -33,7 +33,7 @@ public class StubNotificationProvider : INotificationProvider
 
                 default:
                     _logger.LogInformation(
-                        "STUB: {Channel} not yet implemented — notification {Id} skipped",
+                        "Channel {Channel} not yet implemented — notification {Id} skipped",
                         notification.Channel, notification.Id);
                     return true;
             }
@@ -53,27 +53,28 @@ public class StubNotificationProvider : INotificationProvider
             ?? throw new InvalidOperationException(
                 $"Could not deserialize email payload for notification {notification.Id}");
 
+        // RecipientEmail lives on the notification, not inside the payload
+        var to = notification.RecipientEmail;
+
         var message = new EmailMessage(
-            From: "NotificationHub <no-reply@coursevaultai.app>",
-            To: payload.To,
+            From: "NotificationHub <noreply@coursevaultai.app>",
+            To: to,
             Subject: payload.Subject,
             Html: $"<p>{payload.Body}</p>",
             Text: payload.Body
-            
         );
 
         await _emailProvider.SendAsync(message, cancellationToken);
 
         _logger.LogInformation(
             "Email sent via SendByte for notification {Id} to {To}",
-            notification.Id, payload.To);
+            notification.Id, to);
 
         return true;
     }
 
     private record EmailPayload(
-    [property: JsonPropertyName("to")] string To,
-    [property: JsonPropertyName("subject")] string Subject,
-    [property: JsonPropertyName("body")] string Body
-);
+        [property: JsonPropertyName("subject")] string Subject,
+        [property: JsonPropertyName("body")] string Body
+    );
 }

@@ -17,6 +17,7 @@ namespace NotificationHub.Infrastructure.DependencyInjection;
 
 public static class InfrastructureServiceExtensions
 {
+    // Used by BOTH Api and Worker
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
         IConfiguration configuration)
@@ -24,22 +25,16 @@ public static class InfrastructureServiceExtensions
         // Repositories
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<IUserRepository, UserRepository>();
-        services.AddScoped<IOrganizationRepository, OrganizationRepository>();  // ← new
+        services.AddScoped<IOrganizationRepository, OrganizationRepository>();
+
+        // Auth services
+        services.AddScoped<IPasswordHasher, PasswordHasherService>();
+        services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
+        services.AddSingleton<IClock, SystemClock>();
 
         // Tokens
         services.AddScoped<IVerificationTokenRepository, VerificationTokenRepository>();
         services.AddScoped<ITokenGenerator, TokenGenerator>();
-
-        // Auth services
-        services.AddScoped<IPasswordHasher, Infrastructure.Auth.PasswordHasherService>();
-        services.AddScoped<IJwtTokenGenerator, JwtTokenGenerator>();
-        services.AddSingleton<IClock, SystemClock>();
-        services.AddHttpContextAccessor();
-        services.AddScoped<ICurrentUser, CurrentUser>();
-        services.AddScoped<ICurrentOrganization, CurrentOrganization>();       
-        services.AddHttpContextAccessor();
-        services.AddScoped<ICurrentOrganization, CurrentOrganization>();
-        services.AddScoped<IClock, SystemClock>();
 
         // Template Repository
         services.AddScoped<ITemplateRepository, TemplateRepository>();
@@ -56,7 +51,18 @@ public static class InfrastructureServiceExtensions
             ConnectionMultiplexer.Connect(redisConnection));
         services.AddScoped<INotificationQueue, RedisNotificationQueue>();
 
-        // JWT auth
+        return services;
+    }
+
+    // Used by Api ONLY — needs ASP.NET Core routing infrastructure
+    public static IServiceCollection AddHttpAuth(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUser, CurrentUser>();
+        services.AddScoped<ICurrentOrganization, CurrentOrganization>();
+
         var jwtSecret = configuration["Jwt:Secret"]
             ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
 

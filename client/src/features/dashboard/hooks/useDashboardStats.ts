@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { dashboardApi } from '../api/dashboardApi'
-import type { DashboardStats } from '../types/dashboard.types'
+import type { DashboardStats, ActivityItem } from '../types/dashboard.types'
 
 const FALLBACK_STATS: DashboardStats = {
   totalSent: 0,
@@ -13,15 +13,21 @@ const FALLBACK_STATS: DashboardStats = {
 
 export function useDashboardStats() {
   const [stats, setStats] = useState<DashboardStats>(FALLBACK_STATS)
+  const [activity, setActivity] = useState<ActivityItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     dashboardApi
       .getStats()
       .then(setStats)
-      .catch(() => setStats(FALLBACK_STATS)) // backend not built yet — fail quietly
+      .catch(() => setStats(FALLBACK_STATS))
       .finally(() => setIsLoading(false))
+
+    dashboardApi
+      .getActivity()
+      .then(setActivity)
+      .catch(() => setActivity([]))
   }, [])
 
-  return { stats, isLoading }
+  return { stats, activity, isLoading }
 }

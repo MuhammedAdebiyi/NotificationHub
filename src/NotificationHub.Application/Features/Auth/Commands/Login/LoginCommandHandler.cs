@@ -29,6 +29,9 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, Result<LoginRes
 
         if (user is null || !_passwordHasher.Verify(request.Password, user.PasswordHash))
             return Result<LoginResult>.Failure("Invalid email or password.");
+        
+        if (!user.IsEmailVerified)
+            return Result<LoginResult>.Failure("Please verify your email before logging in.");
 
         var token = _jwtTokenGenerator.Generate(user);
 

@@ -36,10 +36,8 @@ public class AuthController : ControllerBase
 
         return Ok(new
         {
-            token = result.Value!.Token,
-            userId = result.Value.UserId,
-            organizationId = result.Value.OrganizationId,
-            email = result.Value.Email
+            message = "Account created. Check your email to verify before logging in.",
+            email = result.Value!.Email
         });
     }
 
@@ -73,7 +71,13 @@ public class AuthController : ControllerBase
         if (!result.IsSuccess)
             return BadRequest(new { error = result.Error });
 
-        return Ok(new { verified = true });
+        return Ok(new
+        {
+            token = result.Value!.Token,
+            userId = result.Value.UserId,
+            organizationId = result.Value.OrganizationId,
+            email = result.Value.Email
+        });
     }
 
     [HttpPost("forgot-password")]

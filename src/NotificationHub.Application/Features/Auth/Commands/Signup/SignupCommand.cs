@@ -12,8 +12,6 @@ public record SignupCommand(
 ) : IRequest<Result<SignupResult>>;
 
 public record SignupResult(
-    string Token,
     Guid UserId,
-    Guid OrganizationId,
     string Email
 );

@@ -27,7 +27,8 @@ builder.Services.AddApiVersioning(options =>
     options.ReportApiVersions = true;
 });
 builder.Services.AddOpenApi();
-
+builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHttpAuth(builder.Configuration);
 // Database
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));

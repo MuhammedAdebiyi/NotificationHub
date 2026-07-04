@@ -6,6 +6,7 @@ export default function SignupForm() {
   const [form, setForm] = useState({
     fullName: '',
     email: '',
+    orgName: '',
     password: '',
     confirmPassword: '',
   })
@@ -23,8 +24,8 @@ export default function SignupForm() {
     return (
       <div className="text-center py-10">
         <p className="hand text-2xl text-teal mb-2">almost there —</p>
-        <h2 className="font-display font-bold text-3xl mb-3">Email verification sent</h2>
-        <p className="text-ink/60">Check your inbox to verify your account before logging in.</p>
+        <h2 className="font-display font-bold text-3xl mb-3">Check your email</h2>
+        <p className="text-ink/60">We sent a verification link to <strong>{form.email}</strong></p>
       </div>
     )
   }
@@ -32,9 +33,7 @@ export default function SignupForm() {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-xl">
-          {error}
-        </div>
+        <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-xl">{error}</div>
       )}
 
       <input
@@ -48,8 +47,16 @@ export default function SignupForm() {
       <input
         type="email"
         name="email"
-        placeholder="Email address"
+        placeholder="Work email"
         value={form.email}
+        onChange={handleChange}
+        required
+        className="w-full bg-fog border border-ink/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet"
+      />
+      <input
+        name="orgName"
+        placeholder="Organization name (e.g. CourseVault)"
+        value={form.orgName}
         onChange={handleChange}
         required
         className="w-full bg-fog border border-ink/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet"

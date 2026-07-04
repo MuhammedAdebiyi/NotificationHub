@@ -27,6 +27,11 @@ public class OrganizationRepository : IOrganizationRepository
 
     public async Task AddMemberAsync(OrganizationMember member, CancellationToken cancellationToken = default) =>
         await _context.OrganizationMembers.AddAsync(member, cancellationToken);
+        
+    public async Task<OrganizationMember?> GetMembershipByUserIdAsync(
+    Guid userId, CancellationToken cancellationToken = default)
+    => await _context.OrganizationMembers
+        .FirstOrDefaultAsync(m => m.UserId == userId, cancellationToken);
 
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default) =>
         await _context.SaveChangesAsync(cancellationToken);

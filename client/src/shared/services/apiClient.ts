@@ -21,11 +21,14 @@ class ApiClient {
   private async handleResponse<T>(response: Response): Promise<T> {
     if (!response.ok) {
       const errorBody = await response.json().catch(() => null)
-      throw new Error(errorBody?.error ?? errorBody?.message ?? `Request failed with status ${response.status}`)
+      const message = errorBody?.error
+        ?? errorBody?.message
+        ?? `Request failed with status ${response.status}`
+      throw new Error(message)
     }
     return response.json()
   }
-
+  
   async get<T>(path: string): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
       method: 'GET',

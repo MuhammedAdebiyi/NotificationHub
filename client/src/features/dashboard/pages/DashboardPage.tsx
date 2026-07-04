@@ -5,7 +5,7 @@ import QueueMetrics from '../components/QueueMetrics'
 import { useDashboardStats } from '../hooks/useDashboardStats'
 
 export default function DashboardPage() {
-  const { stats } = useDashboardStats()
+  const { stats, activity } = useDashboardStats()
 
   return (
     <AppLayout>
@@ -25,7 +25,7 @@ export default function DashboardPage() {
 
       <div className="grid lg:grid-cols-3 gap-6">
         <QueueMetrics />
-        <ActivityFeed />
+        <ActivityFeed items={activity} />
       </div>
     </AppLayout>
   )

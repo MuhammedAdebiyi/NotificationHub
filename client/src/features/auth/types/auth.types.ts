@@ -1,14 +1,15 @@
-export interface LoginRequest {
-  email: string
-  password: string
-  rememberMe: boolean
-}
-
 export interface SignupRequest {
   fullName: string
   email: string
   password: string
   confirmPassword: string
+  orgName: string
+}
+
+export interface LoginRequest {
+  email: string
+  password: string
+  rememberMe: boolean
 }
 
 export interface ForgotPasswordRequest {
@@ -26,4 +27,5 @@ export interface AuthResponse {
   userId: string
   email: string
   fullName?: string
+  organizationId?: string
 }

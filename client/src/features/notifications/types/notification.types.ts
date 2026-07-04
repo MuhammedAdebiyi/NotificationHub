@@ -2,9 +2,8 @@ export type NotificationStatus = 'Pending' | 'Processing' | 'Sent' | 'Failed' | 
 export type NotificationChannel = 'Email' | 'Sms' | 'Push' | 'InApp'
 
 export interface Notification {
-  id: string
   publicId: string
-  userId: string
+  recipientEmail: string
   type: string
   channel: NotificationChannel
   status: NotificationStatus
