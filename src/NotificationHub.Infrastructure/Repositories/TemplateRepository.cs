@@ -14,14 +14,15 @@ public class TemplateRepository : ITemplateRepository
         _context = context;
     }
 
-    public async Task<Template?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
-        => await _context.Templates.FindAsync([id], cancellationToken);
+    public async Task<Template?> GetByIdAsync(Guid id, Guid organizationId, CancellationToken cancellationToken = default)
+        => await _context.Templates
+            .FirstOrDefaultAsync(t => t.Id == id && t.OrganizationId == organizationId && t.DeletedAt == null, cancellationToken);
 
     public async Task<(IReadOnlyList<Template> Items, int TotalCount)> GetPagedAsync(
-        int page, int pageSize, CancellationToken cancellationToken = default)
+        Guid organizationId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var query = _context.Templates
-            .Where(t => t.DeletedAt == null)
+            .Where(t => t.OrganizationId == organizationId && t.DeletedAt == null)
             .OrderByDescending(t => t.CreatedAt);
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -36,9 +37,10 @@ public class TemplateRepository : ITemplateRepository
     public async Task AddAsync(Template template, CancellationToken cancellationToken = default)
         => await _context.Templates.AddAsync(template, cancellationToken);
 
-    public async Task DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(Guid id, Guid organizationId, CancellationToken cancellationToken = default)
     {
-        var template = await _context.Templates.FindAsync([id], cancellationToken);
+        var template = await _context.Templates
+            .FirstOrDefaultAsync(t => t.Id == id && t.OrganizationId == organizationId && t.DeletedAt == null, cancellationToken);
         if (template is not null)
             template.DeletedAt = DateTime.UtcNow;
     }
