@@ -68,7 +68,6 @@ function RichToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
   return (
     <div className="flex flex-wrap items-center gap-1 px-3 py-2 border-b border-ink/10 bg-fog/50">
-      {/* Text style */}
       <button onClick={() => editor.chain().focus().toggleBold().run()} className={btn(editor.isActive('bold'))}>
         <strong>B</strong>
       </button>
@@ -84,7 +83,6 @@ function RichToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
       <div className="w-px h-5 bg-ink/10 mx-1" />
 
-      {/* Headings */}
       <button onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} className={btn(editor.isActive('heading', { level: 1 }))}>
         H1
       </button>
@@ -97,7 +95,6 @@ function RichToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
       <div className="w-px h-5 bg-ink/10 mx-1" />
 
-      {/* Alignment */}
       <button onClick={() => editor.chain().focus().setTextAlign('left').run()} className={btn(editor.isActive({ textAlign: 'left' }))}>
         ←
       </button>
@@ -110,7 +107,6 @@ function RichToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
       <div className="w-px h-5 bg-ink/10 mx-1" />
 
-      {/* Lists */}
       <button onClick={() => editor.chain().focus().toggleBulletList().run()} className={btn(editor.isActive('bulletList'))}>
         • List
       </button>
@@ -120,7 +116,6 @@ function RichToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
       <div className="w-px h-5 bg-ink/10 mx-1" />
 
-      {/* Color */}
       <label className="flex items-center gap-1 cursor-pointer px-2 py-1.5 rounded hover:bg-fog text-xs text-ink/70">
         Color
         <input
@@ -132,17 +127,11 @@ function RichToolbar({ editor }: { editor: ReturnType<typeof useEditor> }) {
 
       <div className="w-px h-5 bg-ink/10 mx-1" />
 
-      {/* Image + Link */}
-      <button onClick={addImage} className={btn(false)}>
-        Image
-      </button>
-      <button onClick={setLink} className={btn(editor.isActive('link'))}>
-        Link
-      </button>
+      <button onClick={addImage} className={btn(false)}>Image</button>
+      <button onClick={setLink} className={btn(editor.isActive('link'))}>Link</button>
 
       <div className="w-px h-5 bg-ink/10 mx-1" />
 
-      {/* Blockquote + Code */}
       <button onClick={() => editor.chain().focus().toggleBlockquote().run()} className={btn(editor.isActive('blockquote'))}>
         Quote
       </button>
@@ -188,16 +177,32 @@ export default function TemplateEditorPage() {
 
   useEffect(() => {
     if (!id) return
-    apiClient.get<{ id: string; name: string; subject: string; body: string }>(
-      `/api/v1/templates/${id}`
-    )
+
+    const controller = new AbortController()
+    setIsLoading(true)
+    setError(null)
+
+    apiClient
+      .get<{ id: string; name: string; subject: string; body: string }>(
+        `/api/v1/templates/${id}`
+      )
       .then(res => {
+        if (controller.signal.aborted) return
         setForm({ name: res.name, subject: res.subject, body: res.body })
-        richEditor?.commands.setContent(res.body)
+        setTimeout(() => {
+          richEditor?.commands.setContent(res.body)
+        }, 0)
       })
-      .catch(() => setError('Template not found.'))
-      .finally(() => setIsLoading(false))
-  }, [id, richEditor])
+      .catch(err => {
+        if (controller.signal.aborted) return
+        setError(err instanceof Error ? err.message : 'Failed to load template.')
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setIsLoading(false)
+      })
+
+    return () => controller.abort()
+  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function handleSave() {
     setSaving(true)
@@ -274,7 +279,6 @@ export default function TemplateEditorPage() {
           <h1 className="font-display font-bold text-2xl">{form.name || 'Untitled Template'}</h1>
         </div>
         <div className="flex items-center gap-3">
-          {/* Mode toggle */}
           <div className="flex items-center bg-fog rounded-lg p-1 gap-1">
             <button
               onClick={() => switchMode('html')}
