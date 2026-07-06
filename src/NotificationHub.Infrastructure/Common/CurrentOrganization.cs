@@ -25,7 +25,7 @@ public class CurrentOrganization : ICurrentOrganization
                 && itemValue is Guid orgId)
                 return orgId;
 
-            // JWT auth — set by JwtBearer middleware
+            // JWT auth
             var claim = ctx.User.FindFirstValue("org_id");
             return Guid.TryParse(claim, out var jwtOrgId) ? jwtOrgId : null;
         }
@@ -45,6 +45,5 @@ public class CurrentOrganization : ICurrentOrganization
         }
     }
 
-    public bool IsAuthenticated =>
-        OrganizationId.HasValue;
+    public bool IsAuthenticated => OrganizationId.HasValue;
 }

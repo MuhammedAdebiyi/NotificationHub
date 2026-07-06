@@ -13,6 +13,8 @@ import TemplateEditor from '@/pages/TemplateEditor'
 import Campaigns from '@/pages/Campaigns'
 import Analytics from '@/pages/Analytics'
 import Users from '@/pages/Users'
+import NoOrganization from '@/pages/NoOrganization'
+import AcceptInvite from '@/pages/AcceptInvite'
 import Settings from '@/pages/Settings'
 import VerifyEmail from '@/pages/VerifyEmail'
 
@@ -26,6 +28,8 @@ export default function AppRouter() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/accept-invite" element={<AcceptInvite />} />
+        <Route path="/no-organization" element={<NoOrganization />} />
 
         {/* Protected routes */}
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />

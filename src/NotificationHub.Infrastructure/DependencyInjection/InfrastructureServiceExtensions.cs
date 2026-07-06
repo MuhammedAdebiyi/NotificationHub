@@ -39,6 +39,14 @@ public static class InfrastructureServiceExtensions
         // Template Repository
         services.AddScoped<ITemplateRepository, TemplateRepository>();
 
+
+        // Organisation Repository
+        services.AddScoped<IOrganizationMemberRepository, OrganizationMemberRepository>();
+        services.AddScoped<IOrgInviteRepository, OrgInviteRepository>();
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUser, CurrentUser>();
+        services.AddScoped<ICurrentOrganization, CurrentOrganization>();
+
         // Email provider
         services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();
 

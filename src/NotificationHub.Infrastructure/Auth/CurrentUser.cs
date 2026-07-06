@@ -27,5 +27,5 @@ public class CurrentUser : ICurrentUser
         _httpContextAccessor.HttpContext?.User.FindFirstValue(ClaimTypes.Email);
 
     public bool IsAuthenticated =>
-        _httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated ?? false;
+        _httpContextAccessor.HttpContext?.User.Identity?.IsAuthenticated == true;
 }
