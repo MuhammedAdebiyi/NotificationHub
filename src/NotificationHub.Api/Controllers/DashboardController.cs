@@ -72,6 +72,33 @@ public class DashboardController : ControllerBase
         });
     }
 
+    [HttpGet("volume")]
+    public async Task<IActionResult> GetVolume(CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        var orgId = _currentOrg.OrganizationId.Value;
+        var from = DateTime.UtcNow.AddDays(-6).Date;
+
+        var data = await _context.Notifications
+            .Where(n => n.OrganizationId == orgId && n.CreatedAt >= from)
+            .GroupBy(n => n.CreatedAt.Date)
+            .Select(g => new { date = g.Key, count = g.Count() })
+            .OrderBy(x => x.date)
+            .ToListAsync(cancellationToken);
+
+        
+        var result = Enumerable.Range(0, 7)
+            .Select(i => {
+                var day = from.AddDays(i);
+                var found = data.FirstOrDefault(d => d.date == day);
+                return new { date = day.ToString("MMM dd"), count = found?.count ?? 0 };
+            });
+
+        return Ok(result);
+    }
+
     [HttpGet("activity")]
     public async Task<IActionResult> GetActivity(CancellationToken cancellationToken)
     {

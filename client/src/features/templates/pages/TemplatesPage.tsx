@@ -16,7 +16,8 @@ interface TemplateForm {
   body: string
 }
 
-type EditorTab = 'html' | 'preview'
+type EditorMode = 'html' | 'text'
+type EditorTab = 'editor' | 'preview'
 
 const STARTER_HTML = `<!DOCTYPE html>
 <html>
@@ -52,6 +53,51 @@ const STARTER_HTML = `<!DOCTYPE html>
 </body>
 </html>`
 
+const STARTER_TEXT = `Hi {{FirstName}},
+
+Thanks for joining {{AppName}}. We're excited to have you on board.
+
+Get started here: {{CtaUrl}}
+
+— The {{AppName}} Team`
+
+interface DeleteModalProps {
+  name: string
+  onConfirm: () => void
+  onCancel: () => void
+}
+
+function DeleteModal({ name, onConfirm, onCancel }: DeleteModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
+        <div className="w-12 h-12 bg-coral/10 rounded-full flex items-center justify-center mb-4">
+          <span className="text-coral text-xl">✕</span>
+        </div>
+        <h3 className="font-display font-bold text-lg mb-1">Delete template?</h3>
+        <p className="text-sm text-ink/60 mb-6">
+          <span className="font-medium text-ink">"{name}"</span> will be permanently deleted. This cannot be undone.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg text-sm font-medium hover:bg-coral/80 transition"
+          >
+            Delete
+          </button>
+          <button
+            onClick={onCancel}
+            className="flex-1 px-4 py-2.5 border border-ink/20 rounded-lg text-sm font-medium hover:bg-fog transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function TemplatesPage() {
   const navigate = useNavigate()
   const [templates, setTemplates] = useState<Template[]>([])
@@ -60,7 +106,9 @@ export default function TemplatesPage() {
   const [form, setForm] = useState<TemplateForm>({ name: '', subject: '', body: STARTER_HTML })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<EditorTab>('html')
+  const [editorMode, setEditorMode] = useState<EditorMode>('html')
+  const [activeTab, setActiveTab] = useState<EditorTab>('editor')
+  const [deleteTarget, setDeleteTarget] = useState<Template | null>(null)
 
   async function load() {
     try {
@@ -94,31 +142,52 @@ export default function TemplatesPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this template?')) return
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return
     try {
-      await apiClient.delete(`/api/v1/templates/${id}`)
+      await apiClient.delete(`/api/v1/templates/${deleteTarget.id}`)
+      setDeleteTarget(null)
       await load()
     } catch {
-      // fail silently
+      setDeleteTarget(null)
     }
   }
 
   function openNew() {
     setShowForm(true)
+    setEditorMode('html')
+    setActiveTab('editor')
     setForm({ name: '', subject: '', body: STARTER_HTML })
-    setActiveTab('html')
     setError(null)
   }
 
+  function handleModeSwitch(mode: EditorMode) {
+    setEditorMode(mode)
+    setActiveTab('editor')
+    setForm(f => ({
+      ...f,
+      body: mode === 'html' ? STARTER_HTML : STARTER_TEXT
+    }))
+  }
+
+  const placeholders = ['{{FirstName}}', '{{AppName}}', '{{CtaUrl}}', '{{BannerUrl}}']
+
   return (
     <AppLayout>
+      {deleteTarget && (
+        <DeleteModal
+          name={deleteTarget.name}
+          onConfirm={handleDeleteConfirm}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
+
       <div className="flex items-center justify-between mb-6">
         <div>
           <p className="hand text-xl text-violet mb-1">reusable designs —</p>
           <h1 className="font-display font-bold text-3xl">Templates</h1>
           <p className="text-ink/50 text-sm mt-1">
-            Write HTML + CSS, use {`{{Placeholder}}`} variables, embed images by URL
+            HTML or plain text — use {`{{Placeholder}}`} variables anywhere
           </p>
         </div>
         {!showForm && (
@@ -131,17 +200,37 @@ export default function TemplatesPage() {
         )}
       </div>
 
-      {/* New template form */}
       {showForm && (
         <div className="bg-white border border-ink/10 rounded-xl mb-6 overflow-hidden">
           <div className="flex items-center justify-between px-6 py-4 border-b border-ink/10">
             <h2 className="font-display font-bold text-lg">New Template</h2>
-            <button
-              onClick={() => { setShowForm(false); setError(null) }}
-              className="text-ink/40 hover:text-ink text-sm"
-            >
-              Cancel
-            </button>
+            <div className="flex items-center gap-4">
+              {/* Mode toggle */}
+              <div className="flex items-center bg-fog rounded-lg p-1 gap-1">
+                <button
+                  onClick={() => handleModeSwitch('html')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                    editorMode === 'html' ? 'bg-white shadow-sm text-ink' : 'text-ink/50 hover:text-ink'
+                  }`}
+                >
+                  HTML
+                </button>
+                <button
+                  onClick={() => handleModeSwitch('text')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                    editorMode === 'text' ? 'bg-white shadow-sm text-ink' : 'text-ink/50 hover:text-ink'
+                  }`}
+                >
+                  Plain Text
+                </button>
+              </div>
+              <button
+                onClick={() => { setShowForm(false); setError(null) }}
+                className="text-ink/40 hover:text-ink text-sm"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
 
           <div className="p-6 space-y-4">
@@ -166,48 +255,53 @@ export default function TemplatesPage() {
               </div>
             </div>
 
-            {/* Editor tabs */}
+            {/* Editor */}
             <div>
-              <div className="flex items-center gap-1 mb-2 border-b border-ink/10">
-                <button
-                  onClick={() => setActiveTab('html')}
-                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
-                    activeTab === 'html'
-                      ? 'border-violet text-violet'
-                      : 'border-transparent text-ink/50 hover:text-ink'
-                  }`}
-                >
-                  HTML Editor
-                </button>
-                <button
-                  onClick={() => setActiveTab('preview')}
-                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
-                    activeTab === 'preview'
-                      ? 'border-violet text-violet'
-                      : 'border-transparent text-ink/50 hover:text-ink'
-                  }`}
-                >
-                  Preview
-                </button>
-                <div className="ml-auto pb-2">
-                  <span className="text-xs text-ink/30 font-mono">
-                    {`{{Placeholder}}`} variables supported
-                  </span>
+              {editorMode === 'html' && (
+                <div className="flex items-center gap-1 mb-2 border-b border-ink/10">
+                  <button
+                    onClick={() => setActiveTab('editor')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
+                      activeTab === 'editor'
+                        ? 'border-violet text-violet'
+                        : 'border-transparent text-ink/50 hover:text-ink'
+                    }`}
+                  >
+                    Editor
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('preview')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${
+                      activeTab === 'preview'
+                        ? 'border-violet text-violet'
+                        : 'border-transparent text-ink/50 hover:text-ink'
+                    }`}
+                  >
+                    Preview
+                  </button>
                 </div>
-              </div>
+              )}
 
-              {activeTab === 'html' ? (
+              {activeTab === 'editor' || editorMode === 'text' ? (
                 <div>
                   <textarea
-                    className="w-full border border-ink/20 rounded-lg px-4 py-3 text-xs font-mono leading-relaxed bg-ink text-paper resize-none focus:outline-none focus:ring-1 focus:ring-violet"
-                    rows={24}
-                    spellCheck={false}
-                    placeholder="Paste or write your HTML email here..."
+                    className={`w-full border border-ink/20 rounded-lg px-4 py-3 text-sm leading-relaxed resize-none focus:outline-none focus:ring-1 focus:ring-violet ${
+                      editorMode === 'html'
+                        ? 'font-mono text-xs bg-ink text-paper'
+                        : 'font-body bg-white text-ink'
+                    }`}
+                    rows={editorMode === 'html' ? 24 : 12}
+                    spellCheck={editorMode === 'text'}
+                    placeholder={
+                      editorMode === 'html'
+                        ? 'Paste or write your HTML email here...'
+                        : 'Write your plain text email here...'
+                    }
                     value={form.body}
                     onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
                   />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {['{{FirstName}}', '{{AppName}}', '{{CtaUrl}}', '{{BannerUrl}}'].map(v => (
+                  <div className="mt-2 flex flex-wrap gap-2 items-center">
+                    {placeholders.map(v => (
                       <button
                         key={v}
                         onClick={() => setForm(f => ({ ...f, body: f.body + v }))}
@@ -216,13 +310,11 @@ export default function TemplatesPage() {
                         {v}
                       </button>
                     ))}
-                    <span className="text-xs text-ink/30 self-center ml-1">
-                      Click to insert variable
-                    </span>
+                    <span className="text-xs text-ink/30 ml-1">click to insert</span>
                   </div>
                 </div>
               ) : (
-                <div className="border border-ink/10 rounded-lg overflow-hidden bg-fog">
+                <div className="border border-ink/10 rounded-lg overflow-hidden">
                   <div className="px-3 py-2 bg-fog border-b border-ink/10 flex items-center gap-2">
                     <span className="w-2.5 h-2.5 rounded-full bg-coral/60" />
                     <span className="w-2.5 h-2.5 rounded-full bg-yellow/60" />
@@ -261,13 +353,12 @@ export default function TemplatesPage() {
         </div>
       )}
 
-      {/* Template list */}
       {isLoading ? (
         <p className="text-ink/50 text-sm">Loading...</p>
       ) : templates.length === 0 ? (
         <div className="text-center py-20 text-ink/40">
           <p className="text-lg font-medium mb-1">No templates yet</p>
-          <p className="text-sm">Create your first HTML email template to get started.</p>
+          <p className="text-sm">Create your first template to get started.</p>
         </div>
       ) : (
         <div className="bg-white border border-ink/10 rounded-xl overflow-hidden">
@@ -301,7 +392,7 @@ export default function TemplatesPage() {
                         Edit
                       </button>
                       <button
-                        onClick={() => handleDelete(t.id)}
+                        onClick={() => setDeleteTarget(t)}
                         className="text-xs px-3 py-1 border border-coral/30 text-coral rounded-lg hover:bg-red-50 transition"
                       >
                         Delete
