@@ -57,12 +57,7 @@ export default function Landing() {
     <AuthLayout>
       {/* Hero */}
       <section className="text-center py-20 sm:py-28 relative">
-        <div className="inline-block mb-4 px-4 py-1.5 bg-violet/10 rounded-full">
-          <span className="text-violet text-xs font-semibold tracking-wide uppercase">
-            Open beta — free to start
-          </span>
-        </div>
-
+       
         <p className="hand text-3xl text-violet mb-3">notifications, handled properly —</p>
 
         <h1 className="font-display font-extrabold text-5xl sm:text-7xl leading-[1.05] tracking-tight">

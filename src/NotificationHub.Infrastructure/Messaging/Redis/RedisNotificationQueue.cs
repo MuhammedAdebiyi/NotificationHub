@@ -22,8 +22,15 @@ public class RedisNotificationQueue : INotificationQueue
 
     public async Task<Guid?> DequeueAsync(CancellationToken cancellationToken = default)
     {
-        var value = await _db.ListRightPopAsync(QueueKey);
-        if (value.IsNullOrEmpty) return null;
-        return Guid.Parse((string)value!);
+        try
+        {
+            var value = await _db.ListRightPopAsync(QueueKey);
+            if (value.IsNullOrEmpty) return null;
+            return Guid.Parse((string)value!);
+        }
+        catch (RedisTimeoutException)
+        {
+            return null; 
+        }
     }
 }
