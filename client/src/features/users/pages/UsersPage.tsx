@@ -2,11 +2,14 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { apiClient } from '@/shared/services/apiClient'
+import { authService } from '@/shared/services/auth.service'
 
 interface Member {
   id: string
   role: string
   joinedAt: string
+  revokedAt: string | null
+  isRevoked: boolean
   user: {
     id: string
     fullName: string
@@ -25,6 +28,10 @@ interface Invite {
 
 export default function UsersPage() {
   const navigate = useNavigate()
+  const currentUser = authService.getUser()
+  const currentRole = currentUser?.role ?? 'member'
+  const canManage = currentRole === 'owner' || currentRole === 'admin'
+
   const [members, setMembers] = useState<Member[]>([])
   const [invites, setInvites] = useState<Invite[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -39,16 +46,18 @@ export default function UsersPage() {
     try {
       const [membersRes, invitesRes] = await Promise.all([
         apiClient.get<Member[]>('/api/v1/org/members'),
-        apiClient.get<Invite[]>('/api/v1/org/invites'),
+        canManage
+          ? apiClient.get<Invite[]>('/api/v1/org/invites')
+          : Promise.resolve([]),
       ])
       setMembers(membersRes)
-      setInvites(invitesRes)
+      setInvites(invitesRes as Invite[])
     } catch {
       // fail silently
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [canManage])
 
   useEffect(() => { load() }, [load])
 
@@ -73,7 +82,7 @@ export default function UsersPage() {
   }
 
   async function handleCancelInvite(e: React.MouseEvent, id: string) {
-    e.stopPropagation() // prevent row click
+    e.stopPropagation()
     try {
       await apiClient.delete(`/api/v1/org/invites/${id}`)
       await load()
@@ -98,12 +107,15 @@ export default function UsersPage() {
           <p className="hand text-xl text-violet mb-1">your team —</p>
           <h1 className="font-display font-bold text-3xl">Team</h1>
         </div>
-        <button
-          onClick={() => setShowInviteModal(true)}
-          className="px-4 py-2 bg-ink text-white rounded-lg text-sm font-medium hover:bg-violet transition"
-        >
-          + Invite Member
-        </button>
+        {/* Only owner/admin see the invite button */}
+        {canManage && (
+          <button
+            onClick={() => setShowInviteModal(true)}
+            className="px-4 py-2 bg-ink text-white rounded-lg text-sm font-medium hover:bg-violet transition"
+          >
+            + Invite Member
+          </button>
+        )}
       </div>
 
       {isLoading ? (
@@ -142,20 +154,20 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      m.role === 'revoked'
-                        ? 'bg-red-100 text-red-500'
-                        : 'bg-teal/10 text-teal'
+                      m.role === 'revoked' ? 'bg-red-100 text-red-500' : 'bg-teal/10 text-teal'
                     }`}>
                       {m.role === 'revoked' ? 'Revoked' : 'Active'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-ink/40">
-                    {new Date(m.joinedAt).toLocaleDateString()}
+                    {m.joinedAt ? new Date(m.joinedAt).toLocaleDateString() : '—'}
                   </td>
                   <td className="px-4 py-3 text-ink/40 text-xs">View →</td>
                 </tr>
               ))}
-              {invites.map(i => (
+
+              {/* Pending invites — only visible to owner/admin */}
+              {canManage && invites.map(i => (
                 <tr key={i.id} className="opacity-60">
                   <td className="px-4 py-3 text-ink/40 italic">Invited</td>
                   <td className="px-4 py-3 text-ink/60">{i.email}</td>
@@ -185,7 +197,8 @@ export default function UsersPage() {
         </div>
       )}
 
-      {showInviteModal && (
+      {/* Invite modal — only rendered for owner/admin */}
+      {canManage && showInviteModal && (
         <div className="fixed inset-0 bg-ink/40 backdrop-blur-sm flex items-center justify-center z-50 px-4">
           <div className="bg-paper rounded-2xl shadow-xl p-8 w-full max-w-md">
             <div className="flex items-center justify-between mb-6">

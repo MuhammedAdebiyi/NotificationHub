@@ -1,5 +1,8 @@
+using Asp.Versioning;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using NotificationHub.Application.Abstractions;
 using NotificationHub.Application.Features.Auth.Commands.ForgotPassword;
 using NotificationHub.Application.Features.Auth.Commands.Login;
 using NotificationHub.Application.Features.Auth.Commands.ResetPassword;
@@ -13,10 +16,20 @@ namespace NotificationHub.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IMediator _mediator;
+    private readonly IUserRepository _userRepository;
+    private readonly IOrganizationMemberRepository _memberRepository;
+    private readonly IJwtTokenGenerator _jwtTokenGenerator;
 
-    public AuthController(IMediator mediator)
+    public AuthController(
+        IMediator mediator,
+        IUserRepository userRepository,
+        IOrganizationMemberRepository memberRepository,
+        IJwtTokenGenerator jwtTokenGenerator)
     {
         _mediator = mediator;
+        _userRepository = userRepository;
+        _memberRepository = memberRepository;
+        _jwtTokenGenerator = jwtTokenGenerator;
     }
 
     [HttpPost("signup")]
@@ -50,13 +63,84 @@ public class AuthController : ControllerBase
         if (!result.IsSuccess)
             return Unauthorized(new { error = result.Error });
 
+        var value = result.Value!;
+
+        // Multi-org — return org list, no token
+        if (value.RequiresOrgSelection)
+        {
+            return Ok(new
+            {
+                token = (string?)null,
+                userId = value.UserId,
+                email = value.Email,
+                fullName = value.FullName,
+                requiresOrgSelection = true,
+                organizations = value.Organizations?.Select(o => new
+                {
+                    organizationId = o.OrganizationId,
+                    orgName = o.OrgName,
+                    role = o.Role,
+                })
+            });
+        }
+
+        // No org — signal frontend to show no-org page
+        if (value.Token is null)
+        {
+            return Ok(new
+            {
+                token = (string?)null,
+                userId = value.UserId,
+                email = value.Email,
+                fullName = value.FullName,
+                requiresOrgSelection = false,
+                organizations = (object?)null,
+            });
+        }
+
+        // Single org — return token
         return Ok(new
         {
-            token = result.Value!.Token,
-            userId = result.Value.UserId,
-            organizationId = result.Value.OrganizationId,
-            email = result.Value.Email,
-            fullName = result.Value.FullName
+            token = value.Token,
+            userId = value.UserId,
+            organizationId = value.OrganizationId,
+            email = value.Email,
+            fullName = value.FullName,
+            requiresOrgSelection = false,
+            organizations = (object?)null,
+        });
+    }
+
+    [HttpPost("select-org")]
+    [AllowAnonymous]
+    public async Task<IActionResult> SelectOrg(
+        [FromBody] SelectOrgRequest request,
+        CancellationToken cancellationToken)
+    {
+        var user = await _userRepository.GetByIdAsync(request.UserId, cancellationToken);
+        if (user is null)
+            return Unauthorized(new { error = "Invalid user." });
+
+        var membership = await _memberRepository.GetByUserAndOrgAsync(
+            request.UserId, request.OrganizationId, cancellationToken);
+
+        if (membership is null)
+            return Forbid();
+
+        if (membership.Role == "revoked")
+            return StatusCode(403, new { error = "access_revoked" });
+
+        var token = _jwtTokenGenerator.Generate(user, membership.OrganizationId, membership.Role);
+
+        return Ok(new
+        {
+            token,
+            userId = user.Id,
+            organizationId = membership.OrganizationId,
+            email = user.Email,
+            fullName = user.FullName,
+            requiresOrgSelection = false,
+            organizations = (object?)null,
         });
     }
 
@@ -102,7 +186,7 @@ public class AuthController : ControllerBase
     }
 
     [HttpGet("me")]
-    [Microsoft.AspNetCore.Authorization.Authorize]
+    [Authorize]
     public IActionResult Me()
     {
         var userId = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
@@ -117,5 +201,6 @@ public class AuthController : ControllerBase
 
 public record SignupRequest(string FullName, string Email, string Password, string ConfirmPassword, string OrgName);
 public record LoginRequest(string Email, string Password);
+public record SelectOrgRequest(Guid UserId, Guid OrganizationId);
 public record ForgotPasswordRequest(string Email);
 public record ResetPasswordRequest(string Token, string Password, string ConfirmPassword);

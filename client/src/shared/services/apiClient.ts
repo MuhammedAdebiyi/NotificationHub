@@ -21,12 +21,18 @@ class ApiClient {
   private async handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorBody = await response.json().catch(() => null)
-    if (response.status === 403 && errorBody?.code === 'access_revoked') {
-      window.dispatchEvent(new CustomEvent('access_revoked', { 
-        detail: { orgName: errorBody.orgName } 
-      }))
+    const errorCode = errorBody?.error
+
+    // Revoked access — redirect immediately
+    if (response.status === 403 && errorCode === 'access_revoked') {
+      window.location.href = '/access-revoked'
+      throw new Error('access_revoked')
     }
-    throw new Error(errorBody?.error ?? errorBody?.message ?? `Request failed with status ${response.status}`)
+
+    const message = errorBody?.error
+      ?? errorBody?.message
+      ?? `Request failed with status ${response.status}`
+    throw new Error(message)
   }
   return response.json()
 }

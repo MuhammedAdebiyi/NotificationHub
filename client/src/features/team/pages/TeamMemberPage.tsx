@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { apiClient } from '@/shared/services/apiClient'
+import { authService } from '@/shared/services/auth.service'
 
 interface MemberProfile {
   id: string
   role: string
   joinedAt: string
-  invitedAt: string
+  invitedAt: string | null
   revokedAt: string | null
   isRevoked: boolean
   user: {
@@ -17,11 +18,19 @@ interface MemberProfile {
     isEmailVerified: boolean
     createdAt: string
   }
+  activity: {
+    notificationsSent: number
+    templatesCreated: number
+  }
 }
 
 export default function TeamMemberPage() {
   const { memberId } = useParams<{ memberId: string }>()
   const navigate = useNavigate()
+  const currentUser = authService.getUser()
+  const currentRole = currentUser?.role ?? 'member'
+  const canManage = currentRole === 'owner' || currentRole === 'admin'
+
   const [member, setMember] = useState<MemberProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
@@ -36,8 +45,9 @@ export default function TeamMemberPage() {
   }, [memberId])
 
   async function handleRevoke() {
-    if (!confirm('Revoke this member\'s access? They can still log in but won\'t be able to use the organization.')) return
+    if (!confirm("Revoke this member's access? They can still log in but won't be able to use the organization.")) return
     setActionLoading(true)
+    setError(null)
     try {
       await apiClient.put(`/api/v1/org/members/${memberId}/revoke`)
       const updated = await apiClient.get<MemberProfile>(`/api/v1/org/members/${memberId}`)
@@ -51,6 +61,7 @@ export default function TeamMemberPage() {
 
   async function handleRestore() {
     setActionLoading(true)
+    setError(null)
     try {
       await apiClient.put(`/api/v1/org/members/${memberId}/restore`)
       const updated = await apiClient.get<MemberProfile>(`/api/v1/org/members/${memberId}`)
@@ -64,6 +75,7 @@ export default function TeamMemberPage() {
 
   async function handleRoleChange(newRole: string) {
     setActionLoading(true)
+    setError(null)
     try {
       await apiClient.put(`/api/v1/org/members/${memberId}/role`, { role: newRole })
       const updated = await apiClient.get<MemberProfile>(`/api/v1/org/members/${memberId}`)
@@ -118,50 +130,73 @@ export default function TeamMemberPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Profile card */}
-        <div className="md:col-span-2 bg-white border border-ink/10 rounded-xl p-6 space-y-4">
-          <div className="flex items-start justify-between">
-            <div>
-              <p className="font-display font-bold text-xl">{member.user.fullName}</p>
-              <p className="text-ink/60 text-sm">{member.user.email}</p>
+        <div className="md:col-span-2 space-y-6">
+          <div className="bg-white border border-ink/10 rounded-xl p-6 space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="font-display font-bold text-xl">{member.user.fullName}</p>
+                <p className="text-ink/60 text-sm">{member.user.email}</p>
+              </div>
+              <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleStyle[member.role] ?? 'bg-fog text-ink/60'}`}>
+                {member.role}
+              </span>
             </div>
-            <span className={`text-xs px-2 py-1 rounded-full font-medium ${roleStyle[member.role] ?? 'bg-fog text-ink/60'}`}>
-              {member.role}
-            </span>
+
+            <div className="border-t border-ink/5 pt-4 grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">Member ID</p>
+                <p className="font-mono text-xs text-ink/60 break-all">{member.id}</p>
+              </div>
+              <div>
+                <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">User ID</p>
+                <p className="font-mono text-xs text-ink/60 break-all">{member.user.id}</p>
+              </div>
+              <div>
+                <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">Joined</p>
+                <p>{member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '—'}</p>
+              </div>
+              <div>
+                <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">Invited</p>
+                <p>{member.invitedAt ? new Date(member.invitedAt).toLocaleDateString() : '—'}</p>
+              </div>
+              <div>
+                <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">Email verified</p>
+                <p>{member.user.isEmailVerified ? '✓ Verified' : '✗ Unverified'}</p>
+              </div>
+              {member.revokedAt && (
+                <div>
+                  <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">Revoked</p>
+                  <p className="text-red-500">{new Date(member.revokedAt).toLocaleDateString()}</p>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="border-t border-ink/5 pt-4 grid grid-cols-2 gap-4 text-sm">
-            <div>
-              <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">Member ID</p>
-              <p className="font-mono text-xs text-ink/60 break-all">{member.id}</p>
-            </div>
-            <div>
-              <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">User ID</p>
-              <p className="font-mono text-xs text-ink/60 break-all">{member.user.id}</p>
-            </div>
-            <div>
-              <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">Joined</p>
-              <p>{member.joinedAt ? new Date(member.joinedAt).toLocaleDateString() : '—'}</p>
-            </div>
-            <div>
-              <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">Invited</p>
-              <p>{member.invitedAt ? new Date(member.invitedAt).toLocaleDateString() : '—'}</p>
-            </div>
-            <div>
-              <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">Email verified</p>
-              <p>{member.user.isEmailVerified ? '✓ Verified' : '✗ Unverified'}</p>
-            </div>
-            {member.revokedAt && (
-              <div>
-                <p className="text-ink/40 text-xs uppercase tracking-wide mb-1">Revoked</p>
-                <p className="text-red-500">{new Date(member.revokedAt).toLocaleDateString()}</p>
+          {/* Activity stats */}
+          <div className="bg-white border border-ink/10 rounded-xl p-6">
+            <p className="font-display font-bold text-sm uppercase tracking-wide text-ink/40 mb-4">
+              Organization activity
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-fog/50 rounded-xl p-4 text-center">
+                <p className="font-display font-bold text-3xl text-violet">
+                  {member.activity.notificationsSent}
+                </p>
+                <p className="text-xs text-ink/50 mt-1">Notifications sent</p>
               </div>
-            )}
+              <div className="bg-fog/50 rounded-xl p-4 text-center">
+                <p className="font-display font-bold text-3xl text-teal">
+                  {member.activity.templatesCreated}
+                </p>
+                <p className="text-xs text-ink/50 mt-1">Templates created</p>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Actions card */}
-        {member.role !== 'owner' && (
-          <div className="bg-white border border-ink/10 rounded-xl p-6 space-y-4">
+        {/* Actions card — only for owner/admin, and not on owner members */}
+        {canManage && member.role !== 'owner' && (
+          <div className="bg-white border border-ink/10 rounded-xl p-6 space-y-4 h-fit">
             <p className="font-display font-bold text-sm uppercase tracking-wide text-ink/40">Actions</p>
 
             <div>
@@ -205,7 +240,7 @@ export default function TeamMemberPage() {
               <p className="text-xs text-ink/40 mt-2 text-center">
                 {member.isRevoked
                   ? 'Restoring gives them back member access.'
-                  : 'They can still log in but won\'t be able to use this org.'}
+                  : "They can still log in but won't be able to use this org."}
               </p>
             </div>
           </div>

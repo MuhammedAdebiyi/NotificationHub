@@ -58,10 +58,11 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
-app.UseAuthentication();
+app.UseMiddleware<OrgMembershipMiddleware>();
 app.UseMiddleware<ApiKeyMiddleware>();
 app.UseAuthorization();
 app.UseAuthorization();
+app.UseMiddleware<NotificationHub.Api.Middlewares.OrgMembershipMiddleware>();
 app.MapControllers();
 
 app.Run();

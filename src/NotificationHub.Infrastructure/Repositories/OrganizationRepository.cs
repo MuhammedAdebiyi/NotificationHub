@@ -27,7 +27,14 @@ public class OrganizationRepository : IOrganizationRepository
 
     public async Task AddMemberAsync(OrganizationMember member, CancellationToken cancellationToken = default) =>
         await _context.OrganizationMembers.AddAsync(member, cancellationToken);
-        
+    public async Task<IReadOnlyList<OrganizationMember>> GetAllMembershipsAsync(
+    Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.OrganizationMembers
+            .Include(m => m.Organization)
+            .Where(m => m.UserId == userId)
+            .ToListAsync(cancellationToken);
+    }
     public async Task<OrganizationMember?> GetMembershipByUserIdAsync(
     Guid userId, CancellationToken cancellationToken = default)
     => await _context.OrganizationMembers

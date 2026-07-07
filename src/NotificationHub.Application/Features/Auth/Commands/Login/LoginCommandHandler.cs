@@ -39,27 +39,58 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, Result<LoginRes
 
         if (!user.IsEmailVerified)
         {
-            // Resend verification link — swallowed so login error is clear
-            try
-            {
-                await _mediator.Send(new SendVerificationEmailCommand(user.Id), cancellationToken);
-            }
+            try { await _mediator.Send(new SendVerificationEmailCommand(user.Id), cancellationToken); }
             catch { }
-
             return Result<LoginResult>.Failure(
                 "Email not verified. We've resent the verification link — check your inbox.");
         }
 
-        // Load the user's primary org membership
-        var membership = await _organizationRepository.GetMembershipByUserIdAsync(
-                user.Id, cancellationToken);
+        var memberships = await _organizationRepository.GetAllMembershipsAsync(
+            user.Id, cancellationToken);
 
-        if (membership is null)
-            return Result<LoginResult>.Failure("No organization found for this account.");
+        // No org at all — show the no-org page
+        if (memberships.Count == 0)
+            return Result<LoginResult>.Success(new LoginResult(
+                Token: null,
+                UserId: user.Id,
+                OrganizationId: null,
+                Email: user.Email,
+                FullName: user.FullName,
+                RequiresOrgSelection: false,
+                Organizations: null
+            ));
 
-        var token = _jwtTokenGenerator.Generate(user, membership.OrganizationId, membership.Role);
+        // Exactly one org — issue JWT directly
+        if (memberships.Count == 1)
+        {
+            var m = memberships[0];
+            var token = _jwtTokenGenerator.Generate(user, m.OrganizationId, m.Role);
+            return Result<LoginResult>.Success(new LoginResult(
+                Token: token,
+                UserId: user.Id,
+                OrganizationId: m.OrganizationId,
+                Email: user.Email,
+                FullName: user.FullName,
+                RequiresOrgSelection: false,
+                Organizations: null
+            ));
+        }
 
-        return Result<LoginResult>.Success(
-            new LoginResult(token, user.Id, membership.OrganizationId, user.Email, user.FullName));
+        // Multiple orgs — return org list, no JWT yet
+        var orgOptions = memberships.Select(m => new OrgOption(
+            m.OrganizationId,
+            m.Organization?.Name ?? "Unknown",
+            m.Role
+        )).ToList();
+
+        return Result<LoginResult>.Success(new LoginResult(
+            Token: null,
+            UserId: user.Id,
+            OrganizationId: null,
+            Email: user.Email,
+            FullName: user.FullName,
+            RequiresOrgSelection: true,
+            Organizations: orgOptions
+        ));
     }
 }

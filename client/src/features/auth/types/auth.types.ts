@@ -22,10 +22,18 @@ export interface ResetPasswordRequest {
   confirmPassword: string
 }
 
+export interface OrgOption {
+  organizationId: string
+  orgName: string
+  role: string
+}
+
 export interface AuthResponse {
-  token: string
+  token: string | null
   userId: string
   email: string
   fullName?: string
-  organizationId?: string
+  organizationId?: string | null
+  requiresOrgSelection: boolean
+  organizations?: OrgOption[] | null
 }

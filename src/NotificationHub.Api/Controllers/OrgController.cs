@@ -21,10 +21,13 @@ public class OrgController : ControllerBase
     private readonly IEmailProvider _emailProvider;
     private readonly ITokenGenerator _tokenGenerator;
     private readonly IPasswordHasher _passwordHasher;
+    
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly ICurrentOrganization _currentOrg;
     private readonly ICurrentUser _currentUser;
     private readonly IClock _clock;
+    private readonly INotificationRepository _notificationRepository;
+    private readonly ITemplateRepository _templateRepository;
     private readonly IConfiguration _configuration;
 
     public OrgController(
@@ -39,6 +42,8 @@ public class OrgController : ControllerBase
         ICurrentOrganization currentOrg,
         ICurrentUser currentUser,
         IClock clock,
+        INotificationRepository notificationRepository,
+        ITemplateRepository templateRepository,
         IConfiguration configuration)
     {
         _memberRepository = memberRepository;
@@ -52,6 +57,8 @@ public class OrgController : ControllerBase
         _currentOrg = currentOrg;
         _currentUser = currentUser;
         _clock = clock;
+        _notificationRepository = notificationRepository;
+        _templateRepository = templateRepository;
         _configuration = configuration;
     }
 
@@ -81,17 +88,36 @@ public class OrgController : ControllerBase
         }));
     }
 
+    [HttpGet("/api/v1/org/info")]
+    [Authorize]
+    public async Task<IActionResult> GetOrgInfo(CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        var org = await _orgRepository.GetByIdAsync(
+            _currentOrg.OrganizationId.Value, cancellationToken);
+
+        if (org is null)
+            return NotFound();
+
+        return Ok(new { org.Name, org.Plan, org.Slug });
+    }
+
     [HttpGet("members/{id:guid}")]
     public async Task<IActionResult> GetMember(Guid id, CancellationToken cancellationToken)
     {
         if (_currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
-        var member = await _memberRepository.GetByIdAsync(
-            id, _currentOrg.OrganizationId.Value, cancellationToken);
+        var orgId = _currentOrg.OrganizationId.Value;
 
+        var member = await _memberRepository.GetByIdAsync(id, orgId, cancellationToken);
         if (member is null)
             return NotFound(new { error = "Member not found." });
+
+        var notificationCount = await _notificationRepository.CountByOrgAsync(orgId, cancellationToken);
+        var templateCount = await _templateRepository.CountByOrgAsync(orgId, cancellationToken);
 
         return Ok(new
         {
@@ -100,7 +126,7 @@ public class OrgController : ControllerBase
             member.JoinedAt,
             member.InvitedAt,
             member.RevokedAt,
-            member.IsRevoked,
+            IsRevoked = member.Role == "revoked",
             user = new
             {
                 member.User!.Id,
@@ -108,6 +134,11 @@ public class OrgController : ControllerBase
                 member.User.Email,
                 member.User.IsEmailVerified,
                 member.User.CreatedAt,
+            },
+            activity = new
+            {
+                notificationsSent = notificationCount,
+                templatesCreated = templateCount,
             }
         });
     }
@@ -344,6 +375,7 @@ public class OrgController : ControllerBase
             expiresAt = invite.ExpiresAt,
         });
     }
+
 
     [HttpPost("invites/accept")]
     [AllowAnonymous]

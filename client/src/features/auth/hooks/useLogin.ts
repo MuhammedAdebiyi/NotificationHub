@@ -15,6 +15,27 @@ export function useLogin() {
 
     try {
       const response = await authApi.login(payload)
+
+      // Multi-org: send to picker page
+      if (response.requiresOrgSelection && response.organizations) {
+        navigate('/select-org', {
+          state: {
+            userId: response.userId,
+            email: response.email,
+            fullName: response.fullName,
+            organizations: response.organizations,
+          }
+        })
+        return
+      }
+
+      // No org at all
+      if (!response.token) {
+        navigate('/no-organization')
+        return
+      }
+
+      // Single org — normal flow
       authService.setToken(response.token)
       navigate('/dashboard')
     } catch (err) {

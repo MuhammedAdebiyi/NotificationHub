@@ -46,6 +46,7 @@ public static class InfrastructureServiceExtensions
         services.AddHttpContextAccessor();
         services.AddScoped<ICurrentUser, CurrentUser>();
         services.AddScoped<ICurrentOrganization, CurrentOrganization>();
+        services.AddScoped<CurrentOrganization>();
 
         // Email provider
         services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();

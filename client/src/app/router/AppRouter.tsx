@@ -17,20 +17,28 @@ import NoOrganization from '@/pages/NoOrganization'
 import AcceptInvite from '@/pages/AcceptInvite'
 import TeamMember from '@/pages/TeamMember'
 import Settings from '@/pages/Settings'
+import SelectOrg from '@/pages/SelectOrg'
 import VerifyEmail from '@/pages/VerifyEmail'
+import AccessRevoked from '@/pages/AccessRevoked'
+
 
 export default function AppRouter() {
   return (
     <BrowserRouter>
       <Routes>
+
         {/* Public routes */}
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/select-org" element={<SelectOrg />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/accept-invite" element={<AcceptInvite />} />
         <Route path="/no-organization" element={<NoOrganization />} />
+        <Route path="/access-revoked" element={<AccessRevoked />} />
+    
+        
 
         {/* Protected routes */}
         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
