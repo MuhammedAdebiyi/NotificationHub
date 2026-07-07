@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Domain.Entities;
 using NotificationHub.Shared.Abstractions;
@@ -24,6 +25,7 @@ public class OrgController : ControllerBase
     private readonly ICurrentOrganization _currentOrg;
     private readonly ICurrentUser _currentUser;
     private readonly IClock _clock;
+    private readonly IConfiguration _configuration;
 
     public OrgController(
         IOrganizationMemberRepository memberRepository,
@@ -36,7 +38,8 @@ public class OrgController : ControllerBase
         IJwtTokenGenerator jwtTokenGenerator,
         ICurrentOrganization currentOrg,
         ICurrentUser currentUser,
-        IClock clock)
+        IClock clock,
+        IConfiguration configuration)
     {
         _memberRepository = memberRepository;
         _inviteRepository = inviteRepository;
@@ -49,9 +52,9 @@ public class OrgController : ControllerBase
         _currentOrg = currentOrg;
         _currentUser = currentUser;
         _clock = clock;
+        _configuration = configuration;
     }
 
-    // GET /api/v1/org/members
     [HttpGet("members")]
     public async Task<IActionResult> GetMembers(CancellationToken cancellationToken)
     {
@@ -66,6 +69,8 @@ public class OrgController : ControllerBase
             m.Id,
             m.Role,
             m.JoinedAt,
+            m.RevokedAt,
+            m.IsRevoked,
             user = new
             {
                 m.User!.Id,
@@ -76,7 +81,37 @@ public class OrgController : ControllerBase
         }));
     }
 
-    // DELETE /api/v1/org/members/{id}
+    [HttpGet("members/{id:guid}")]
+    public async Task<IActionResult> GetMember(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        var member = await _memberRepository.GetByIdAsync(
+            id, _currentOrg.OrganizationId.Value, cancellationToken);
+
+        if (member is null)
+            return NotFound(new { error = "Member not found." });
+
+        return Ok(new
+        {
+            member.Id,
+            member.Role,
+            member.JoinedAt,
+            member.InvitedAt,
+            member.RevokedAt,
+            member.IsRevoked,
+            user = new
+            {
+                member.User!.Id,
+                member.User.FullName,
+                member.User.Email,
+                member.User.IsEmailVerified,
+                member.User.CreatedAt,
+            }
+        });
+    }
+
     [HttpDelete("members/{id:guid}")]
     public async Task<IActionResult> RemoveMember(Guid id, CancellationToken cancellationToken)
     {
@@ -104,7 +139,90 @@ public class OrgController : ControllerBase
         return Ok(new { removed = true });
     }
 
-    // GET /api/v1/org/invites
+    [HttpPut("members/{id:guid}/role")]
+    public async Task<IActionResult> UpdateRole(
+        Guid id,
+        [FromBody] UpdateRoleRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        if (_currentOrg.Role != "owner")
+            return Forbid();
+
+        var allowedRoles = new[] { "admin", "member" };
+        if (!allowedRoles.Contains(request.Role))
+            return BadRequest(new { error = "Role must be 'admin' or 'member'." });
+
+        var member = await _memberRepository.GetByIdAsync(
+            id, _currentOrg.OrganizationId.Value, cancellationToken);
+
+        if (member is null)
+            return NotFound(new { error = "Member not found." });
+
+        if (member.Role == "owner")
+            return BadRequest(new { error = "Cannot change the owner's role." });
+
+        if (member.UserId == _currentUser.UserId)
+            return BadRequest(new { error = "Cannot change your own role." });
+
+        member.Role = request.Role;
+        await _memberRepository.SaveChangesAsync(cancellationToken);
+
+        return Ok(new { updated = true, role = member.Role });
+    }
+
+    [HttpPut("members/{id:guid}/revoke")]
+    public async Task<IActionResult> RevokeMember(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        if (_currentOrg.Role != "owner" && _currentOrg.Role != "admin")
+            return Forbid();
+
+        var member = await _memberRepository.GetByIdAsync(
+            id, _currentOrg.OrganizationId.Value, cancellationToken);
+
+        if (member is null)
+            return NotFound(new { error = "Member not found." });
+
+        if (member.Role == "owner")
+            return BadRequest(new { error = "Cannot revoke the organization owner." });
+
+        if (member.UserId == _currentUser.UserId)
+            return BadRequest(new { error = "Cannot revoke yourself." });
+
+        member.Role = "revoked";
+        member.RevokedAt = _clock.UtcNow;
+        await _memberRepository.SaveChangesAsync(cancellationToken);
+
+        return Ok(new { revoked = true });
+    }
+
+    [HttpPut("members/{id:guid}/restore")]
+    public async Task<IActionResult> RestoreMember(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        if (_currentOrg.Role != "owner" && _currentOrg.Role != "admin")
+            return Forbid();
+
+        var member = await _memberRepository.GetByIdAsync(
+            id, _currentOrg.OrganizationId.Value, cancellationToken);
+
+        if (member is null)
+            return NotFound(new { error = "Member not found." });
+
+        member.Role = "member";
+        member.RevokedAt = null;
+        await _memberRepository.SaveChangesAsync(cancellationToken);
+
+        return Ok(new { restored = true });
+    }
+
     [HttpGet("invites")]
     public async Task<IActionResult> GetInvites(CancellationToken cancellationToken)
     {
@@ -124,7 +242,6 @@ public class OrgController : ControllerBase
         }));
     }
 
-    // POST /api/v1/org/invites
     [HttpPost("invites")]
     public async Task<IActionResult> SendInvite(
         [FromBody] SendInviteRequest request,
@@ -153,8 +270,8 @@ public class OrgController : ControllerBase
             return BadRequest(new { error = "A pending invite already exists for this email." });
 
         var org = await _orgRepository.GetByIdAsync(orgId, cancellationToken);
-
         var token = _tokenGenerator.Generate(32);
+
         var invite = new OrgInvite
         {
             OrganizationId = orgId,
@@ -168,24 +285,25 @@ public class OrgController : ControllerBase
         await _inviteRepository.AddAsync(invite, cancellationToken);
         await _inviteRepository.SaveChangesAsync(cancellationToken);
 
-        var link = $"https://notification-hub-chi.vercel.app/accept-invite?token={token}";
+        var frontendUrl = _configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173";
+        var link = $"{frontendUrl}/accept-invite?token={token}";
+
         await _emailProvider.SendAsync(new EmailMessage(
-            From: "noreply@mail.notificationhub.io",
+            From: "NotificationHub <no-reply@coursevaultai.app>",
             To: request.Email,
             Subject: $"You've been invited to join {org?.Name ?? "an organization"} on NotificationHub",
             Html: $"""
                 <h2>You've been invited</h2>
                 <p>You've been invited to join <strong>{org?.Name ?? "an organization"}</strong> on NotificationHub as a <strong>{invite.Role}</strong>.</p>
                 <p><a href="{link}" style="background:#7c3aed;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">Accept Invite</a></p>
-                <p style="color:#888;font-size:12px;">This invite expires in 7 days. If you don't have an account yet, you'll be able to create one after clicking the link.</p>
+                <p style="color:#888;font-size:12px;">This invite expires in 7 days.</p>
                 """,
-            Text: $"You've been invited to join {org?.Name ?? "an organization"} on NotificationHub. Accept here: {link} (expires in 7 days)"
+            Text: $"You've been invited to join {org?.Name ?? "an organization"} on NotificationHub. Accept here: {link}"
         ), cancellationToken);
 
         return Ok(new { invited = true, email = request.Email });
     }
 
-    // DELETE /api/v1/org/invites/{id}
     [HttpDelete("invites/{id:guid}")]
     public async Task<IActionResult> CancelInvite(Guid id, CancellationToken cancellationToken)
     {
@@ -207,7 +325,6 @@ public class OrgController : ControllerBase
         return Ok(new { cancelled = true });
     }
 
-    // GET /api/v1/org/invites/validate?token=xxx  — no [Authorize], public endpoint
     [HttpGet("invites/validate")]
     [AllowAnonymous]
     public async Task<IActionResult> ValidateInvite(
@@ -228,7 +345,6 @@ public class OrgController : ControllerBase
         });
     }
 
-    // POST /api/v1/org/invites/accept  — no [Authorize], public endpoint
     [HttpPost("invites/accept")]
     [AllowAnonymous]
     public async Task<IActionResult> AcceptInvite(
@@ -240,12 +356,10 @@ public class OrgController : ControllerBase
         if (invite is null || invite.IsAccepted || invite.ExpiresAt < _clock.UtcNow)
             return BadRequest(new { error = "Invite is invalid or has expired." });
 
-        // Look up or create the user
         var user = await _userRepository.GetByEmailAsync(invite.Email, cancellationToken);
 
         if (user is null)
         {
-            // New user — fullName and password required
             if (string.IsNullOrWhiteSpace(request.FullName) || string.IsNullOrWhiteSpace(request.Password))
                 return BadRequest(new { error = "Full name and password are required to create your account." });
 
@@ -254,14 +368,13 @@ public class OrgController : ControllerBase
                 FullName = request.FullName,
                 Email = invite.Email,
                 PasswordHash = _passwordHasher.Hash(request.Password),
-                IsEmailVerified = true, // invite email proves ownership
+                IsEmailVerified = true,
             };
 
             await _userRepository.AddAsync(user, cancellationToken);
             await _userRepository.SaveChangesAsync(cancellationToken);
         }
 
-        // Check not already a member
         var alreadyMember = await _memberRepository.GetByUserAndOrgAsync(
             user.Id, invite.OrganizationId, cancellationToken);
 
@@ -275,7 +388,6 @@ public class OrgController : ControllerBase
                 InvitedAt = invite.CreatedAt,
                 JoinedAt = _clock.UtcNow,
             };
-
             await _memberRepository.AddAsync(member, cancellationToken);
         }
 
@@ -283,7 +395,39 @@ public class OrgController : ControllerBase
         await _inviteRepository.SaveChangesAsync(cancellationToken);
         await _memberRepository.SaveChangesAsync(cancellationToken);
 
-        // Issue JWT scoped to the invited org
+        var frontendUrl = _configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173";
+
+        // Email to new member
+        await _emailProvider.SendAsync(new EmailMessage(
+            From: "NotificationHub <no-reply@coursevaultai.app>",
+            To: user.Email,
+            Subject: $"Welcome to {invite.Organization?.Name ?? "your organization"} on NotificationHub",
+            Html: $"""
+                <h2>You're in!</h2>
+                <p>Hi {user.FullName}, you've successfully joined <strong>{invite.Organization?.Name ?? "the organization"}</strong> as a <strong>{invite.Role}</strong>.</p>
+                <p><a href="{frontendUrl}/dashboard" style="background:#7c3aed;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">Go to dashboard</a></p>
+                """,
+            Text: $"Hi {user.FullName}, you've joined {invite.Organization?.Name ?? "the organization"} as {invite.Role}."
+        ), cancellationToken);
+
+        // Email to org owner
+        var orgMembers = await _memberRepository.GetByOrgAsync(invite.OrganizationId, cancellationToken);
+        var owner = orgMembers.FirstOrDefault(m => m.Role == "owner");
+        if (owner?.User is not null)
+        {
+            await _emailProvider.SendAsync(new EmailMessage(
+                From: "NotificationHub <no-reply@coursevaultai.app>",
+                To: owner.User.Email,
+                Subject: $"{user.FullName} accepted your invite",
+                Html: $"""
+                    <h2>New team member joined</h2>
+                    <p><strong>{user.FullName}</strong> ({user.Email}) has joined <strong>{invite.Organization?.Name ?? "your organization"}</strong> as a <strong>{invite.Role}</strong>.</p>
+                    <p><a href="{frontendUrl}/users" style="background:#7c3aed;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">View your team</a></p>
+                    """,
+                Text: $"{user.FullName} ({user.Email}) has joined your organization as {invite.Role}."
+            ), cancellationToken);
+        }
+
         var jwt = _jwtTokenGenerator.Generate(user, invite.OrganizationId, invite.Role);
 
         return Ok(new
@@ -297,4 +441,5 @@ public class OrgController : ControllerBase
 }
 
 public record SendInviteRequest(string Email, string? Role);
+public record UpdateRoleRequest(string Role);
 public record AcceptInviteRequest(string Token, string? FullName, string? Password);

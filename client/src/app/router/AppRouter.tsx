@@ -15,6 +15,7 @@ import Analytics from '@/pages/Analytics'
 import Users from '@/pages/Users'
 import NoOrganization from '@/pages/NoOrganization'
 import AcceptInvite from '@/pages/AcceptInvite'
+import TeamMember from '@/pages/TeamMember'
 import Settings from '@/pages/Settings'
 import VerifyEmail from '@/pages/VerifyEmail'
 
@@ -39,6 +40,7 @@ export default function AppRouter() {
         <Route path="/templates/:id" element={<ProtectedRoute><TemplateEditor /></ProtectedRoute>} />
         <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
         <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+        <Route path="/team/:memberId" element={<ProtectedRoute><TeamMember /></ProtectedRoute>} />
         <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

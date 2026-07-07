@@ -19,15 +19,17 @@ class ApiClient {
   }
 
   private async handleResponse<T>(response: Response): Promise<T> {
-    if (!response.ok) {
-      const errorBody = await response.json().catch(() => null)
-      const message = errorBody?.error
-        ?? errorBody?.message
-        ?? `Request failed with status ${response.status}`
-      throw new Error(message)
+  if (!response.ok) {
+    const errorBody = await response.json().catch(() => null)
+    if (response.status === 403 && errorBody?.code === 'access_revoked') {
+      window.dispatchEvent(new CustomEvent('access_revoked', { 
+        detail: { orgName: errorBody.orgName } 
+      }))
     }
-    return response.json()
+    throw new Error(errorBody?.error ?? errorBody?.message ?? `Request failed with status ${response.status}`)
   }
+  return response.json()
+}
   
   async get<T>(path: string): Promise<T> {
     const response = await fetch(`${this.baseUrl}${path}`, {
