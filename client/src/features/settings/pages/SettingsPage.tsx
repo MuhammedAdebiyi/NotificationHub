@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { apiClient } from '@/shared/services/apiClient'
+import { authService } from '@/shared/services/auth.service'
 
 interface ApiKey {
   id: string
@@ -8,15 +10,91 @@ interface ApiKey {
   keyPrefix: string
   isActive: boolean
   createdAt: string
+  lastUsedAt: string | null
+}
+
+function PermissionWall() {
+  const navigate = useNavigate()
+  return (
+    <AppLayout>
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <div className="w-16 h-16 rounded-full bg-coral/10 flex items-center justify-center mb-6">
+          <span className="text-coral text-2xl">⊘</span>
+        </div>
+        <p className="hand text-xl text-coral mb-2">no access —</p>
+        <h2 className="font-display font-bold text-2xl mb-3">
+          You don't have permission
+        </h2>
+        <p className="text-sm text-ink/50 max-w-sm mb-8">
+          API key management is restricted to owners and admins.
+          Contact your organization owner if you need access.
+        </p>
+        <button
+          onClick={() => navigate('/dashboard')}
+          className="px-5 py-2.5 bg-ink text-white rounded-xl text-sm font-medium hover:bg-violet transition"
+        >
+          Back to dashboard
+        </button>
+      </div>
+    </AppLayout>
+  )
+}
+
+function RevokeConfirmModal({
+  keyName,
+  onConfirm,
+  onCancel,
+}: {
+  keyName: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={onCancel} />
+      <div className="relative bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
+        <div className="w-12 h-12 bg-coral/10 rounded-full flex items-center justify-center mb-4">
+          <span className="text-coral text-xl">⊘</span>
+        </div>
+        <h3 className="font-display font-bold text-lg mb-1">Revoke API key?</h3>
+        <p className="text-sm text-ink/60 mb-6">
+          <span className="font-medium text-ink">"{keyName}"</span> will stop working immediately.
+          Any service using this key will lose access. This cannot be undone.
+        </p>
+        <div className="flex gap-3">
+          <button
+            onClick={onConfirm}
+            className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg text-sm font-medium hover:bg-coral/80 transition"
+          >
+            Revoke
+          </button>
+          <button
+            onClick={onCancel}
+            className="flex-1 px-4 py-2.5 border border-ink/20 rounded-lg text-sm font-medium hover:bg-fog transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 export default function SettingsPage() {
+  const currentUser = authService.getUser()
+  const currentRole = currentUser?.role ?? 'member'
+  const canManage = currentRole === 'owner' || currentRole === 'admin'
+
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [newKeyName, setNewKeyName] = useState('')
   const [creating, setCreating] = useState(false)
   const [newKeyValue, setNewKeyValue] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null)
+
+  // Members see permission wall immediately
+  if (!canManage) return <PermissionWall />
 
   async function load() {
     try {
@@ -36,7 +114,7 @@ export default function SettingsPage() {
     setCreating(true)
     setError(null)
     try {
-      const res = await apiClient.post<{ key: string; id: string; name: string }>(
+      const res = await apiClient.post<{ key: string; id: string; name: string; keyPrefix: string; createdAt: string }>(
         '/api/v1/org/api-keys',
         { name: newKeyName }
       )
@@ -50,49 +128,81 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleRevoke(id: string) {
-    if (!confirm('Revoke this API key? This cannot be undone.')) return
+  async function handleRevoke(key: ApiKey) {
+    setRevokeTarget(key)
+  }
+
+  async function confirmRevoke() {
+    if (!revokeTarget) return
     try {
-      await apiClient.delete(`/api/v1/org/api-keys/${id}`)
+      await apiClient.delete(`/api/v1/org/api-keys/${revokeTarget.id}`)
+      setRevokeTarget(null)
       await load()
     } catch {
-      // fail silently
+      setRevokeTarget(null)
     }
   }
 
   return (
     <AppLayout>
+      {revokeTarget && (
+        <RevokeConfirmModal
+          keyName={revokeTarget.name}
+          onConfirm={confirmRevoke}
+          onCancel={() => setRevokeTarget(null)}
+        />
+      )}
+
       <div className="mb-8">
         <p className="hand text-xl text-violet mb-1">configuration —</p>
         <h1 className="font-display font-bold text-3xl">Settings</h1>
       </div>
 
       <div className="max-w-2xl space-y-8">
-        {/* New key revealed */}
+        {/* New key revealed — copy once banner */}
         {newKeyValue && (
           <div className="bg-teal/10 border border-teal/30 rounded-xl p-5">
-            <p className="text-sm font-semibold text-teal mb-2">
-              ✓ API key created — copy it now, it won't be shown again
+            <p className="text-sm font-semibold text-teal mb-1">
+              ✓ API key created
             </p>
-            <code className="block bg-white border border-teal/20 rounded-lg px-4 py-3 text-sm font-mono break-all">
+            <p className="text-xs text-teal/70 mb-3">
+              Copy it now — this is the only time it will be shown.
+            </p>
+            <code className="block bg-white border border-teal/20 rounded-lg px-4 py-3 text-sm font-mono break-all select-all">
               {newKeyValue}
             </code>
-            <button
-              onClick={() => { navigator.clipboard.writeText(newKeyValue); setNewKeyValue(null) }}
-              className="mt-3 text-xs px-3 py-1.5 bg-teal text-white rounded-lg hover:bg-teal/80 transition"
-            >
-              Copy & dismiss
-            </button>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => navigator.clipboard.writeText(newKeyValue)}
+                className="text-xs px-3 py-1.5 bg-teal text-white rounded-lg hover:bg-teal/80 transition"
+              >
+                Copy
+              </button>
+              <button
+                onClick={() => setNewKeyValue(null)}
+                className="text-xs px-3 py-1.5 border border-teal/30 text-teal rounded-lg hover:bg-teal/10 transition"
+              >
+                Dismiss
+              </button>
+            </div>
           </div>
         )}
 
-        {/* Create new key */}
-        <div className="bg-fog border border-ink/10 rounded-xl p-6">
-          <h2 className="font-display font-bold text-lg mb-4">API Keys</h2>
+        {/* API Keys section */}
+        <div className="bg-white border border-ink/10 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-display font-bold text-lg">API Keys</h2>
+          </div>
+          <p className="text-xs text-ink/40 mb-6">
+            Use these keys to authenticate requests from your backend services.
+            Keys are shown once — store them securely.
+          </p>
+
+          {/* Create */}
           <div className="flex gap-3 mb-6">
             <input
-              className="flex-1 border border-ink/20 rounded-lg px-3 py-2 text-sm"
-              placeholder="Key name e.g. CourseVault Production"
+              className="flex-1 border border-ink/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet"
+              placeholder="Key name — e.g. CourseVault Production"
               value={newKeyName}
               onChange={e => setNewKeyName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleCreate()}
@@ -100,32 +210,47 @@ export default function SettingsPage() {
             <button
               onClick={handleCreate}
               disabled={creating || !newKeyName.trim()}
-              className="px-4 py-2 bg-ink text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-ink/80 transition"
+              className="px-4 py-2 bg-ink text-white rounded-lg text-sm font-medium disabled:opacity-50 hover:bg-violet transition"
             >
-              {creating ? 'Creating...' : 'Create'}
+              {creating ? 'Creating...' : '+ Create'}
             </button>
           </div>
-          {error && <p className="text-sm text-coral mb-4">{error}</p>}
 
+          {error && (
+            <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-xl mb-4">
+              {error}
+            </div>
+          )}
+
+          {/* Key list */}
           {isLoading ? (
-            <p className="text-sm text-ink/40">Loading...</p>
+            <p className="text-sm text-ink/40 text-center py-6">Loading...</p>
           ) : keys.length === 0 ? (
-            <p className="text-sm text-ink/40 text-center py-6">No API keys yet.</p>
+            <div className="text-center py-8 text-ink/40">
+              <p className="text-sm">No API keys yet.</p>
+              <p className="text-xs mt-1">Create one above to start authenticating requests.</p>
+            </div>
           ) : (
             <div className="divide-y divide-ink/5">
               {keys.map(k => (
-                <div key={k.id} className="flex items-center justify-between py-3">
+                <div key={k.id} className="flex items-center justify-between py-3.5">
                   <div>
                     <p className="text-sm font-medium">{k.name}</p>
-                    <p className="text-xs text-ink/40 font-mono mt-0.5">{k.keyPrefix}••••••••</p>
+                    <p className="text-xs text-ink/40 font-mono mt-0.5">
+                      {k.keyPrefix}••••••••••••••••••••••
+                    </p>
+                    <p className="text-xs text-ink/30 mt-0.5">
+                      Created {new Date(k.createdAt).toLocaleDateString()}
+                      {k.lastUsedAt && ` · Last used ${new Date(k.lastUsedAt).toLocaleDateString()}`}
+                    </p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-xs text-ink/30">
-                      {new Date(k.createdAt).toLocaleDateString()}
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-teal/10 text-teal font-medium">
+                      Active
                     </span>
                     <button
-                      onClick={() => handleRevoke(k.id)}
-                      className="text-xs px-3 py-1 border border-coral/30 text-coral rounded-lg hover:bg-red-50 transition"
+                      onClick={() => handleRevoke(k)}
+                      className="text-xs px-3 py-1.5 border border-coral/30 text-coral rounded-lg hover:bg-red-50 transition"
                     >
                       Revoke
                     </button>
@@ -134,6 +259,26 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Org info — read only for now */}
+        <div className="bg-white border border-ink/10 rounded-xl p-6">
+          <h2 className="font-display font-bold text-lg mb-1">Organization</h2>
+          <p className="text-xs text-ink/40 mb-4">Your organization details.</p>
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between py-2 border-b border-ink/5">
+              <span className="text-ink/50">Plan</span>
+              <span className="font-medium capitalize">{currentUser?.role === 'owner' ? 'Free' : '—'}</span>
+            </div>
+            <div className="flex justify-between py-2 border-b border-ink/5">
+              <span className="text-ink/50">Your role</span>
+              <span className="font-medium capitalize">{currentRole}</span>
+            </div>
+            <div className="flex justify-between py-2">
+              <span className="text-ink/50">Sending domain</span>
+              <span className="font-mono text-xs text-ink/60">noreply@mail.notificationhub.io</span>
+            </div>
+          </div>
         </div>
       </div>
     </AppLayout>

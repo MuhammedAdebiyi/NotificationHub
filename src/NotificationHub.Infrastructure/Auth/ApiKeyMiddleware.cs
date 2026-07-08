@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using NotificationHub.Infrastructure.Persistence;
+using NotificationHub.Application.Abstractions;
 
 namespace NotificationHub.Infrastructure.Auth;
 
@@ -17,7 +17,6 @@ public class ApiKeyMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        // If already authenticated via JWT, skip API key check
         if (context.User.Identity?.IsAuthenticated == true)
         {
             await _next(context);
@@ -30,17 +29,25 @@ public class ApiKeyMiddleware
             return;
         }
 
+        var keyString = rawKey.ToString();
+
+        // Must be at least 12 chars to have a valid prefix
+        if (keyString.Length < 12)
+        {
+            context.Response.StatusCode = 401;
+            await context.Response.WriteAsJsonAsync(new { error = "Invalid API key." });
+            return;
+        }
+
         using var scope = context.RequestServices.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var apiKeyRepository = scope.ServiceProvider.GetRequiredService<IApiKeyRepository>();
 
-        // Load all active keys for the org — we need to BCrypt.Verify each one
-        // This is intentionally O(n) per request — key count per org is tiny (< 10)
-        var activeKeys = await db.ApiKeys
-            .Where(k => k.IsActive && k.DeletedAt == null)
-            .ToListAsync();
+        // Get all active keys for this org prefix — narrows to 1 row in practice
+        var prefix = keyString[..12];
+        var candidates = await apiKeyRepository.GetByPrefixAsync(prefix);
 
-        var matchedKey = activeKeys.FirstOrDefault(k =>
-            ApiKeyGenerator.Verify(rawKey.ToString(), k.KeyHash));
+        var matchedKey = candidates.FirstOrDefault(k =>
+            ApiKeyGenerator.Verify(keyString, k.KeyHash));
 
         if (matchedKey is null)
         {
@@ -49,13 +56,16 @@ public class ApiKeyMiddleware
             return;
         }
 
-        // Stamp last used
-        matchedKey.LastUsedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
+        // Stamp last used — fire and forget, don't block the request
+        _ = Task.Run(async () =>
+        {
+            using var stampScope = context.RequestServices.CreateScope();
+            var repo = stampScope.ServiceProvider.GetRequiredService<IApiKeyRepository>();
+            await repo.StampLastUsedAsync(matchedKey.Id, DateTime.UtcNow);
+        });
 
-        // Inject org context into HttpContext items so ICurrentOrganization can read it
         context.Items["OrganizationId"] = matchedKey.OrganizationId;
-        context.Items["OrgRole"] = "service"; // service-to-service calls get "service" role
+        context.Items["OrgRole"] = "service";
 
         await _next(context);
     }

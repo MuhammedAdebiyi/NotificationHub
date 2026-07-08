@@ -54,6 +54,9 @@ public static class InfrastructureServiceExtensions
         // Notification provider
         services.AddScoped<INotificationProvider, StubNotificationProvider>();
 
+        //Api Key
+        services.AddScoped<IApiKeyRepository, ApiKeyRepository>();
+
         // Redis
         var redisConnection = configuration.GetConnectionString("Redis") ?? "localhost:6379";
         services.AddSingleton<IConnectionMultiplexer>(
