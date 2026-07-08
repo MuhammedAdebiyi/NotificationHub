@@ -20,6 +20,8 @@ import Settings from '@/pages/Settings'
 import SelectOrg from '@/pages/SelectOrg'
 import VerifyEmail from '@/pages/VerifyEmail'
 import AccessRevoked from '@/pages/AccessRevoked'
+import CampaignDetail from '@/pages/CampaignDetail'
+
 
 
 export default function AppRouter() {
@@ -48,6 +50,7 @@ export default function AppRouter() {
         <Route path="/templates/:id" element={<ProtectedRoute><TemplateEditor /></ProtectedRoute>} />
         <Route path="/campaigns" element={<ProtectedRoute><Campaigns /></ProtectedRoute>} />
         <Route path="/analytics" element={<ProtectedRoute><Analytics /></ProtectedRoute>} />
+        <Route path="/campaigns/:id" element={<ProtectedRoute><CampaignDetail /></ProtectedRoute>} />
         <Route path="/team/:memberId" element={<ProtectedRoute><TeamMember /></ProtectedRoute>} />
         <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
         <Route path="/verify-email" element={<VerifyEmail />} />

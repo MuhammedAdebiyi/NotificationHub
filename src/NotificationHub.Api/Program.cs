@@ -8,6 +8,7 @@ using NotificationHub.Infrastructure.DependencyInjection;
 using NotificationHub.Api.Middlewares;
 using NotificationHub.Infrastructure.Auth;
 using NotificationHub.Application.Abstractions;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddCors(options =>
@@ -19,33 +20,36 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod();
     });
 });
-builder.Services.AddControllers();
+
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter()));
+
 builder.Services.AddApiVersioning(options =>
 {
     options.DefaultApiVersion = new Asp.Versioning.ApiVersion(1, 0);
     options.AssumeDefaultVersionWhenUnspecified = true;
     options.ReportApiVersions = true;
 });
+
 builder.Services.AddOpenApi();
-builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddHttpAuth(builder.Configuration);
-// Database
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHttpAuth(builder.Configuration);
 
 builder.Services.Configure<VerificationSettings>(
     builder.Configuration.GetSection(VerificationSettings.SectionName));
 
-// MediatR — scans Application assembly for IRequestHandler<> implementations
 builder.Services.AddMediatR(cfg =>
 {
     cfg.RegisterServicesFromAssembly(typeof(IApplicationMarker).Assembly);
     cfg.AddBehavior(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 });
 
-// FluentValidation — scans Application assembly for AbstractValidator<> implementations
 builder.Services.AddValidatorsFromAssembly(typeof(IApplicationMarker).Assembly);
 
 var app = builder.Build();
@@ -54,6 +58,7 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
+
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
@@ -61,8 +66,6 @@ app.UseAuthentication();
 app.UseMiddleware<OrgMembershipMiddleware>();
 app.UseMiddleware<ApiKeyMiddleware>();
 app.UseAuthorization();
-app.UseAuthorization();
-app.UseMiddleware<NotificationHub.Api.Middlewares.OrgMembershipMiddleware>();
 app.MapControllers();
 
 app.Run();

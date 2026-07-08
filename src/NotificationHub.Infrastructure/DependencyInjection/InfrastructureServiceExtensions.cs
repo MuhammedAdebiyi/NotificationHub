@@ -48,6 +48,9 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<ICurrentOrganization, CurrentOrganization>();
         services.AddScoped<CurrentOrganization>();
 
+        // Campaigns
+        services.AddScoped<ICampaignRepository, CampaignRepository>();
+
         // Email provider
         services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();
 

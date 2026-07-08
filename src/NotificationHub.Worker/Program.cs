@@ -7,7 +7,7 @@ using NotificationHub.Worker.Workers;
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Logging.SetMinimumLevel(LogLevel.Debug);
-
+builder.Services.AddHostedService<CampaignWorker>();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 

@@ -4,7 +4,9 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Domain.Entities;
+using NotificationHub.Domain.Enums;
 using NotificationHub.Shared.Abstractions;
+using System.Text.Json;
 
 namespace NotificationHub.Api.Controllers;
 
@@ -16,17 +18,17 @@ public class OrgController : ControllerBase
 {
     private readonly IOrganizationMemberRepository _memberRepository;
     private readonly IOrgInviteRepository _inviteRepository;
+    private readonly INotificationRepository _notificationRepository;
+    private readonly INotificationQueue _notificationQueue;
     private readonly IUserRepository _userRepository;
     private readonly IOrganizationRepository _orgRepository;
     private readonly IEmailProvider _emailProvider;
     private readonly ITokenGenerator _tokenGenerator;
     private readonly IPasswordHasher _passwordHasher;
-    
     private readonly IJwtTokenGenerator _jwtTokenGenerator;
     private readonly ICurrentOrganization _currentOrg;
     private readonly ICurrentUser _currentUser;
     private readonly IClock _clock;
-    private readonly INotificationRepository _notificationRepository;
     private readonly ITemplateRepository _templateRepository;
     private readonly IConfiguration _configuration;
 
@@ -43,6 +45,7 @@ public class OrgController : ControllerBase
         ICurrentUser currentUser,
         IClock clock,
         INotificationRepository notificationRepository,
+        INotificationQueue notificationQueue,
         ITemplateRepository templateRepository,
         IConfiguration configuration)
     {
@@ -51,13 +54,14 @@ public class OrgController : ControllerBase
         _userRepository = userRepository;
         _orgRepository = orgRepository;
         _emailProvider = emailProvider;
+        _notificationRepository = notificationRepository;
+        _notificationQueue = notificationQueue;
         _tokenGenerator = tokenGenerator;
         _passwordHasher = passwordHasher;
         _jwtTokenGenerator = jwtTokenGenerator;
         _currentOrg = currentOrg;
         _currentUser = currentUser;
         _clock = clock;
-        _notificationRepository = notificationRepository;
         _templateRepository = templateRepository;
         _configuration = configuration;
     }
@@ -376,7 +380,6 @@ public class OrgController : ControllerBase
         });
     }
 
-
     [HttpPost("invites/accept")]
     [AllowAnonymous]
     public async Task<IActionResult> AcceptInvite(
@@ -427,37 +430,46 @@ public class OrgController : ControllerBase
         await _inviteRepository.SaveChangesAsync(cancellationToken);
         await _memberRepository.SaveChangesAsync(cancellationToken);
 
+        var orgName = invite.Organization?.Name ?? "your organization";
         var frontendUrl = _configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173";
 
-        // Email to new member
-        await _emailProvider.SendAsync(new EmailMessage(
-            From: "NotificationHub <no-reply@coursevaultai.app>",
-            To: user.Email,
-            Subject: $"Welcome to {invite.Organization?.Name ?? "your organization"} on NotificationHub",
-            Html: $"""
-                <h2>You're in!</h2>
-                <p>Hi {user.FullName}, you've successfully joined <strong>{invite.Organization?.Name ?? "the organization"}</strong> as a <strong>{invite.Role}</strong>.</p>
-                <p><a href="{frontendUrl}/dashboard" style="background:#7c3aed;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">Go to dashboard</a></p>
-                """,
-            Text: $"Hi {user.FullName}, you've joined {invite.Organization?.Name ?? "the organization"} as {invite.Role}."
-        ), cancellationToken);
+        // Queue welcome email to new member — async via Worker
+        var welcomeNotification = new Notification
+        {
+            OrganizationId = invite.OrganizationId,
+            RecipientEmail = user.Email,
+            Type = "InviteAccepted_Welcome",
+            Channel = NotificationChannel.Email,
+            Payload = JsonSerializer.Serialize(new
+            {
+                subject = $"Welcome to {orgName} on NotificationHub",
+                body = $"Hi {user.FullName}, you've successfully joined {orgName} as a {invite.Role}. Go to your dashboard: {frontendUrl}/dashboard"
+            }),
+        };
+        await _notificationRepository.AddAsync(welcomeNotification, cancellationToken);
+        await _notificationRepository.SaveChangesAsync(cancellationToken);
+        await _notificationQueue.EnqueueAsync(welcomeNotification.Id, cancellationToken);
 
-        // Email to org owner
+        // Queue notification to org owner — async via Worker
         var orgMembers = await _memberRepository.GetByOrgAsync(invite.OrganizationId, cancellationToken);
         var owner = orgMembers.FirstOrDefault(m => m.Role == "owner");
         if (owner?.User is not null)
         {
-            await _emailProvider.SendAsync(new EmailMessage(
-                From: "NotificationHub <no-reply@coursevaultai.app>",
-                To: owner.User.Email,
-                Subject: $"{user.FullName} accepted your invite",
-                Html: $"""
-                    <h2>New team member joined</h2>
-                    <p><strong>{user.FullName}</strong> ({user.Email}) has joined <strong>{invite.Organization?.Name ?? "your organization"}</strong> as a <strong>{invite.Role}</strong>.</p>
-                    <p><a href="{frontendUrl}/users" style="background:#7c3aed;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">View your team</a></p>
-                    """,
-                Text: $"{user.FullName} ({user.Email}) has joined your organization as {invite.Role}."
-            ), cancellationToken);
+            var ownerNotification = new Notification
+            {
+                OrganizationId = invite.OrganizationId,
+                RecipientEmail = owner.User.Email,
+                Type = "InviteAccepted_OwnerAlert",
+                Channel = NotificationChannel.Email,
+                Payload = JsonSerializer.Serialize(new
+                {
+                    subject = $"{user.FullName} accepted your invite",
+                    body = $"{user.FullName} ({user.Email}) has joined {orgName} as a {invite.Role}. View your team: {frontendUrl}/users"
+                }),
+            };
+            await _notificationRepository.AddAsync(ownerNotification, cancellationToken);
+            await _notificationRepository.SaveChangesAsync(cancellationToken);
+            await _notificationQueue.EnqueueAsync(ownerNotification.Id, cancellationToken);
         }
 
         var jwt = _jwtTokenGenerator.Generate(user, invite.OrganizationId, invite.Role);
