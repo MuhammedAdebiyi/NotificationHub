@@ -292,7 +292,7 @@ export default function CampaignsPage() {
                     {c.totalRecipients > 0 ? c.totalRecipients.toLocaleString() : '—'}
                   </td>
                   <td className="px-4 py-3 text-ink/40 text-xs">
-                    {c.scheduledAt ? new Date(c.scheduledAt).toLocaleDateString() : '—'}
+                    {c.scheduledAt ? new Date(c.scheduledAt).toLocaleString() : '—'}
                   </td>
                   <td className="px-4 py-3 text-ink/40 text-xs">
                     {new Date(c.createdAt).toLocaleDateString()}

@@ -9,14 +9,18 @@ public class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
     public void Configure(EntityTypeBuilder<Campaign> builder)
     {
         builder.HasKey(c => c.Id);
-
         builder.Property(c => c.Title).IsRequired().HasMaxLength(200);
         builder.Property(c => c.Subject).HasMaxLength(500);
         builder.Property(c => c.Message).IsRequired();
         builder.Property(c => c.Channel).HasConversion<string>().HasMaxLength(20);
         builder.Property(c => c.Status).HasConversion<string>().HasMaxLength(20);
-
         builder.HasIndex(c => c.Status);
+        builder.HasIndex(c => c.OrganizationId);
+
+        builder.HasOne(c => c.CreatedBy)
+            .WithMany()
+            .HasForeignKey(c => c.CreatedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasMany(c => c.Recipients)
             .WithOne(r => r.Campaign)

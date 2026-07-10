@@ -27,12 +27,25 @@ export interface Campaign {
   status: CampaignStatus
   totalRecipients: number
   scheduledAt: string | null
+  startedAt: string | null
+  completedAt: string | null
   createdAt: string
   recipientCount: number
 }
 
-export interface CampaignDetail extends Campaign {
+export interface CampaignDetail {
+  id: string
+  title: string
+  subject: string
   message: string
+  channel: CampaignChannel
+  status: CampaignStatus
+  totalRecipients: number
+  scheduledAt: string | null
+  startedAt: string | null
+  completedAt: string | null
+  createdByUserId: string | null
+  createdAt: string
   stats: {
     sent: number
     pending: number

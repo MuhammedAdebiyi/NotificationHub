@@ -33,6 +33,7 @@ export default function CampaignDetailPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [campaign, setCampaign] = useState<CampaignDetail | null>(null)
+  const campaignRef = useRef<CampaignDetail | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [inputMode, setInputMode] = useState<InputMode>('paste')
   const [recipientInput, setRecipientInput] = useState('')
@@ -57,6 +58,7 @@ export default function CampaignDetailPage() {
         ),
       ])
       setCampaign(data)
+      campaignRef.current = data
       setNotifications(notifData.items)
       setFailedCount(notifData.failedCount)
     } catch {
@@ -66,7 +68,17 @@ export default function CampaignDetailPage() {
     }
   }
 
-  useEffect(() => { load() }, [id])
+  useEffect(() => {
+  load()
+
+  const interval = setInterval(() => {
+    if (campaignRef.current?.status?.toLowerCase() === 'running') {
+      load()
+    }
+  }, 5000)
+
+  return () => clearInterval(interval)
+}, [id])
 
   function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -473,7 +485,57 @@ export default function CampaignDetailPage() {
               </tbody>
             </table>
           </div>
-        </div>
+          {/* Duration banner — shown when completed */}
+        {campaign.completedAt && campaign.startedAt && (
+          <div className="bg-teal/10 border border-teal/20 rounded-xl px-5 py-4 mb-6">
+            <p className="text-sm font-medium text-teal">
+              ✓ Campaign completed in{' '}
+              {(() => {
+                const secs = Math.round(
+                  (new Date(campaign.completedAt!).getTime() -
+                  new Date(campaign.startedAt!).getTime()) / 1000
+                )
+                return secs < 60
+                  ? `${secs} seconds`
+                  : `${Math.floor(secs / 60)}m ${secs % 60}s`
+              })()}
+            </p>
+            <p className="text-xs text-ink/50 mt-1">
+              Started {new Date(campaign.startedAt).toLocaleString()} ·
+              Finished {new Date(campaign.completedAt).toLocaleString()}
+            </p>
+          </div>
+        )}
+        {/* Live activity feed — auto-refreshes when running */}
+        {isRunning && (
+          <div className="mb-6 bg-yellow/5 border border-yellow/20 rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+              <p className="text-sm font-medium">Live — sending in progress</p>
+              <span className="text-xs text-ink/40">updates every 5s</span>
+            </div>
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div>
+                <p className="font-display font-bold text-2xl text-teal">{campaign.stats.sent}</p>
+                <p className="text-xs text-ink/50">Sent</p>
+              </div>
+              <div>
+                <p className="font-display font-bold text-2xl text-violet">{campaign.stats.pending}</p>
+                <p className="text-xs text-ink/50">Queued</p>
+              </div>
+              <div>
+                <p className="font-display font-bold text-2xl text-ink">{campaign.stats.total}</p>
+                <p className="text-xs text-ink/50">Total</p>
+              </div>
+            </div>
+            {campaign.startedAt && (
+              <p className="text-xs text-ink/40 mt-3 text-center">
+                Started {new Date(campaign.startedAt).toLocaleString()}
+              </p>
+            )}
+          </div>
+        )}
+        </div> 
       )}
     </AppLayout>
   )
