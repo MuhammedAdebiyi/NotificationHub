@@ -46,41 +46,12 @@ public class CampaignWorker : BackgroundService
         return stripped.Length > 300 ? stripped[..300] + "..." : stripped;
     }
 
-    private async Task SendOrgEmailsAsync(
-        IOrganizationMemberRepository memberRepository,
-        IEmailProvider emailProvider,
-        Guid orgId,
-        string subject,
-        string html,
-        string text,
-        CancellationToken stoppingToken)
-    {
-        var members = await memberRepository.GetByOrgAsync(orgId, stoppingToken);
-        foreach (var member in members.Where(m => m.Role != "revoked" && m.User?.Email != null))
-        {
-            try
-            {
-                await emailProvider.SendAsync(new EmailMessage(
-                    From: "NotificationHub <noreply@coursevaultai.app>",
-                    To: member.User!.Email,
-                    Subject: subject,
-                    Html: html,
-                    Text: text
-                ), stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to send org notification to {Email}", member.User!.Email);
-            }
-        }
-    }
-
     private async Task ProcessScheduledCampaignsAsync(CancellationToken stoppingToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
         var campaignRepository = scope.ServiceProvider.GetRequiredService<ICampaignRepository>();
         var memberRepository = scope.ServiceProvider.GetRequiredService<IOrganizationMemberRepository>();
-        var emailProvider = scope.ServiceProvider.GetRequiredService<IEmailProvider>();
+        var orgNotifier = scope.ServiceProvider.GetRequiredService<IOrgNotificationService>();
         var clock = scope.ServiceProvider.GetRequiredService<NotificationHub.Shared.Abstractions.IClock>();
 
         var ready = await campaignRepository.GetScheduledReadyAsync(clock.UtcNow, stoppingToken);
@@ -89,43 +60,25 @@ public class CampaignWorker : BackgroundService
         {
             campaign.Status = CampaignStatus.Running;
             campaign.StartedAt = clock.UtcNow;
-            _logger.LogInformation("Campaign {Id} — {Title} — scheduled time reached, starting", campaign.Id, campaign.Title);
+            _logger.LogInformation("Campaign {Id} — {Title} — scheduled time reached, starting",
+                campaign.Id, campaign.Title);
 
             var members = await memberRepository.GetByOrgAsync(campaign.OrganizationId, stoppingToken);
             var creator = members.FirstOrDefault(m => m.UserId == campaign.CreatedByUserId);
             var creatorName = creator?.User?.FullName ?? "Someone";
             var creatorEmail = creator?.User?.Email ?? "—";
-            var creatorId = campaign.CreatedByUserId?.ToString() ?? "—";
             var scheduledTime = campaign.ScheduledAt?.ToString("dddd, MMMM d yyyy 'at' h:mm tt") ?? "now";
             var startedTime = campaign.StartedAt?.ToString("h:mm tt, MMM d yyyy") ?? "now";
             var bodyPreview = StripHtml(campaign.Message);
 
-            await SendOrgEmailsAsync(
-                memberRepository, emailProvider, campaign.OrganizationId,
-                subject: $"Campaign started: {campaign.Title}",
-                html: $"""
-                    <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-                      <h2 style="color:#7c3aed">Campaign Started </h2>
-                      <p>The scheduled campaign <strong>{campaign.Title}</strong> has started sending.</p>
-                      <table style="width:100%;border-collapse:collapse;margin:20px 0">
-                        <tr><td style="padding:8px;color:#888;width:140px">Campaign</td><td style="padding:8px;font-weight:600">{campaign.Title}</td></tr>
-                        <tr style="background:#f9f9f9"><td style="padding:8px;color:#888">Subject</td><td style="padding:8px">{campaign.Subject}</td></tr>
-                        <tr><td style="padding:8px;color:#888">Scheduled for</td><td style="padding:8px">{scheduledTime}</td></tr>
-                        <tr style="background:#f9f9f9"><td style="padding:8px;color:#888">Started at</td><td style="padding:8px">{startedTime}</td></tr>
-                        <tr><td style="padding:8px;color:#888">Recipients</td><td style="padding:8px">{campaign.TotalRecipients}</td></tr>
-                        <tr style="background:#f9f9f9"><td style="padding:8px;color:#888">Created by</td><td style="padding:8px">{creatorName} ({creatorEmail})</td></tr>
-                        <tr><td style="padding:8px;color:#888">Creator ID</td><td style="padding:8px;font-family:monospace;font-size:12px">{creatorId}</td></tr>
-                      </table>
-                      <div style="background:#f5f5f5;border-left:4px solid #7c3aed;padding:16px;margin:20px 0;border-radius:4px">
-                        <p style="margin:0 0 8px;color:#888;font-size:12px;text-transform:uppercase;letter-spacing:1px">Message Preview</p>
-                        <p style="margin:0;color:#333;font-size:14px;line-height:1.6">{bodyPreview}</p>
-                      </div>
-                      <p style="color:#888;font-size:12px">You're receiving this because you're a member of this organization on NotificationHub.</p>
-                    </div>
-                    """,
-                text: $"Campaign started: {campaign.Title}\nScheduled: {scheduledTime}\nStarted: {startedTime}\nRecipients: {campaign.TotalRecipients}\nCreated by: {creatorName} ({creatorEmail})\n\nPreview:\n{bodyPreview}",
-                stoppingToken
-            );
+            await orgNotifier.NotifyOrgAsync(
+                campaign.OrganizationId,
+                $"Campaign started: {campaign.Title}",
+                BuildScheduledStartedEmail(
+                    campaign.Title, campaign.Subject, scheduledTime,
+                    startedTime, campaign.TotalRecipients,
+                    creatorName, creatorEmail, bodyPreview),
+                stoppingToken);
         }
 
         if (ready.Count > 0)
@@ -138,7 +91,7 @@ public class CampaignWorker : BackgroundService
         var campaignRepository = scope.ServiceProvider.GetRequiredService<ICampaignRepository>();
         var notificationRepository = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
         var memberRepository = scope.ServiceProvider.GetRequiredService<IOrganizationMemberRepository>();
-        var emailProvider = scope.ServiceProvider.GetRequiredService<IEmailProvider>();
+        var orgNotifier = scope.ServiceProvider.GetRequiredService<IOrgNotificationService>();
         var queue = scope.ServiceProvider.GetRequiredService<INotificationQueue>();
         var clock = scope.ServiceProvider.GetRequiredService<NotificationHub.Shared.Abstractions.IClock>();
 
@@ -156,49 +109,29 @@ public class CampaignWorker : BackgroundService
                 campaign.Status = CampaignStatus.Completed;
                 campaign.CompletedAt = clock.UtcNow;
 
-                string durationText = "—";
-                if (campaign.StartedAt.HasValue)
-                {
-                    var secs = (int)(campaign.CompletedAt.Value - campaign.StartedAt.Value).TotalSeconds;
-                    durationText = secs < 60 ? $"{secs} seconds" : $"{secs / 60}m {secs % 60}s";
-                    _logger.LogInformation("Campaign {Id} completed in {Duration}", campaign.Id, durationText);
-                }
-                else
-                {
-                    _logger.LogInformation("Campaign {Id} completed", campaign.Id);
-                }
+                var secs = campaign.StartedAt.HasValue
+                    ? (int)(campaign.CompletedAt.Value - campaign.StartedAt.Value).TotalSeconds
+                    : 0;
+                var durationText = secs < 60 ? $"{secs}s" : $"{secs / 60}m {secs % 60}s";
 
+                _logger.LogInformation("Campaign {Id} completed in {Duration}", campaign.Id, durationText);
                 await campaignRepository.SaveChangesAsync(stoppingToken);
 
-                var completedTime = campaign.CompletedAt?.ToString("h:mm tt, MMM d yyyy") ?? "now";
-                var startedTime = campaign.StartedAt?.ToString("h:mm tt, MMM d yyyy") ?? "—";
                 var members = await memberRepository.GetByOrgAsync(campaign.OrganizationId, stoppingToken);
                 var creator = members.FirstOrDefault(m => m.UserId == campaign.CreatedByUserId);
                 var creatorName = creator?.User?.FullName ?? "Someone";
                 var creatorEmail = creator?.User?.Email ?? "—";
+                var completedTime = campaign.CompletedAt?.ToString("h:mm tt, MMM d yyyy") ?? "now";
+                var startedTime = campaign.StartedAt?.ToString("h:mm tt, MMM d yyyy") ?? "—";
 
-                await SendOrgEmailsAsync(
-                    memberRepository, emailProvider, campaign.OrganizationId,
-                    subject: $"Campaign completed: {campaign.Title}",
-                    html: $"""
-                        <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
-                          <h2 style="color:#0d9488">Campaign Completed ✓</h2>
-                          <p>The campaign <strong>{campaign.Title}</strong> finished sending.</p>
-                          <table style="width:100%;border-collapse:collapse;margin:20px 0">
-                            <tr><td style="padding:8px;color:#888;width:140px">Campaign</td><td style="padding:8px;font-weight:600">{campaign.Title}</td></tr>
-                            <tr style="background:#f9f9f9"><td style="padding:8px;color:#888">Subject</td><td style="padding:8px">{campaign.Subject}</td></tr>
-                            <tr><td style="padding:8px;color:#888">Started at</td><td style="padding:8px">{startedTime}</td></tr>
-                            <tr style="background:#f9f9f9"><td style="padding:8px;color:#888">Completed at</td><td style="padding:8px">{completedTime}</td></tr>
-                            <tr><td style="padding:8px;color:#888">Duration</td><td style="padding:8px;font-weight:600;color:#0d9488">{durationText}</td></tr>
-                            <tr style="background:#f9f9f9"><td style="padding:8px;color:#888">Total sent</td><td style="padding:8px">{campaign.TotalRecipients}</td></tr>
-                            <tr><td style="padding:8px;color:#888">Created by</td><td style="padding:8px">{creatorName} ({creatorEmail})</td></tr>
-                          </table>
-                          <p style="color:#888;font-size:12px">You're receiving this because you're a member of this organization on NotificationHub.</p>
-                        </div>
-                        """,
-                    text: $"Campaign completed: {campaign.Title}\nStarted: {startedTime}\nCompleted: {completedTime}\nDuration: {durationText}\nTotal sent: {campaign.TotalRecipients}\nCreated by: {creatorName} ({creatorEmail})",
-                    stoppingToken
-                );
+                await orgNotifier.NotifyOrgAsync(
+                    campaign.OrganizationId,
+                    $"Campaign completed: {campaign.Title}",
+                    BuildCompletedEmail(
+                        campaign.Title, campaign.Subject, startedTime,
+                        completedTime, durationText, campaign.TotalRecipients,
+                        creatorName, creatorEmail),
+                    stoppingToken);
 
                 continue;
             }
@@ -231,4 +164,55 @@ public class CampaignWorker : BackgroundService
             await campaignRepository.SaveChangesAsync(stoppingToken);
         }
     }
+
+    private static string BuildScheduledStartedEmail(
+        string title, string subject, string scheduledTime,
+        string startedTime, int recipients, string creatorName,
+        string creatorEmail, string bodyPreview) => $"""
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e">
+          <div style="background:#7c3aed;padding:32px;border-radius:12px 12px 0 0">
+            <h1 style="margin:0;color:white;font-size:22px;font-weight:700">Campaign Started</h1>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,0.8);font-size:14px">Your scheduled campaign is now sending</p>
+          </div>
+          <div style="background:#fafafa;border:1px solid #eee;border-top:none;border-radius:0 0 12px 12px;padding:32px">
+            <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;width:140px;border-bottom:1px solid #f0f0f0">Campaign</td><td style="padding:10px 12px;font-weight:600;border-bottom:1px solid #f0f0f0">{title}</td></tr>
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0;background:#fff">Subject</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;background:#fff">{subject}</td></tr>
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0">Scheduled for</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0">{scheduledTime}</td></tr>
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0;background:#fff">Started at</td><td style="padding:10px 12px;font-weight:600;color:#7c3aed;border-bottom:1px solid #f0f0f0;background:#fff">{startedTime}</td></tr>
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0">Recipients</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0">{recipients:N0}</td></tr>
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;background:#fff">Created by</td><td style="padding:10px 12px;background:#fff">{creatorName} <span style="color:#888;font-size:12px">({creatorEmail})</span></td></tr>
+            </table>
+            <div style="background:white;border:1px solid #e8e8e8;border-left:4px solid #7c3aed;border-radius:0 8px 8px 0;padding:16px 20px">
+              <p style="margin:0 0 8px;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:600">Message Preview</p>
+              <p style="margin:0;color:#444;font-size:14px;line-height:1.7">{bodyPreview}</p>
+            </div>
+            <p style="color:#bbb;font-size:11px;margin-top:24px;text-align:center">You're receiving this because you're a member of this organization on NotificationHub.</p>
+          </div>
+        </div>
+        """;
+
+    private static string BuildCompletedEmail(
+        string title, string subject, string startedTime,
+        string completedTime, string duration, int totalSent,
+        string creatorName, string creatorEmail) => $"""
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e">
+          <div style="background:#0d9488;padding:32px;border-radius:12px 12px 0 0">
+            <h1 style="margin:0;color:white;font-size:22px;font-weight:700"> Campaign Completed</h1>
+            <p style="margin:8px 0 0;color:rgba(255,255,255,0.8);font-size:14px">All emails have been delivered</p>
+          </div>
+          <div style="background:#fafafa;border:1px solid #eee;border-top:none;border-radius:0 0 12px 12px;padding:32px">
+            <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;width:140px;border-bottom:1px solid #f0f0f0">Campaign</td><td style="padding:10px 12px;font-weight:600;border-bottom:1px solid #f0f0f0">{title}</td></tr>
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0;background:#fff">Subject</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;background:#fff">{subject}</td></tr>
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0">Started at</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0">{startedTime}</td></tr>
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0;background:#fff">Completed at</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;background:#fff">{completedTime}</td></tr>
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0">Duration</td><td style="padding:10px 12px;font-weight:700;color:#0d9488;font-size:16px;border-bottom:1px solid #f0f0f0">{duration}</td></tr>
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0;background:#fff">Total sent</td><td style="padding:10px 12px;font-weight:600;border-bottom:1px solid #f0f0f0;background:#fff">{totalSent:N0} recipients</td></tr>
+              <tr><td style="padding:10px 12px;color:#888;font-size:13px">Created by</td><td style="padding:10px 12px">{creatorName} <span style="color:#888;font-size:12px">({creatorEmail})</span></td></tr>
+            </table>
+            <p style="color:#bbb;font-size:11px;margin-top:24px;text-align:center">You're receiving this because you're a member of this organization on NotificationHub.</p>
+          </div>
+        </div>
+        """;
 }
