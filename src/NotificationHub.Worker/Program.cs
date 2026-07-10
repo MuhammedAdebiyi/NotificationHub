@@ -11,7 +11,16 @@ builder.Services.AddHostedService<CampaignWorker>();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        npgsql => npgsql.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorCodesToAdd: null)));
+
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddHostedService<KeepAliveWorker>();
 builder.Services.AddHostedService<NotificationWorker>();
 
 var host = builder.Build();

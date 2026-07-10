@@ -5,6 +5,8 @@ using NotificationHub.Application.Abstractions;
 using NotificationHub.Domain.Entities;
 using NotificationHub.Domain.Enums;
 using NotificationHub.Shared.Abstractions;
+using NotificationHub.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace NotificationHub.Api.Controllers;
 
@@ -16,18 +18,22 @@ public class CampaignsController : ControllerBase
 {
     private readonly ICampaignRepository _campaignRepository;
     private readonly ITemplateRepository _templateRepository;
+    
     private readonly ICurrentOrganization _currentOrg;
     private readonly IClock _clock;
+    private readonly AppDbContext _context;
 
     public CampaignsController(
         ICampaignRepository campaignRepository,
         ITemplateRepository templateRepository,
+        AppDbContext context,
         ICurrentOrganization currentOrg,
         IClock clock)
     {
         _campaignRepository = campaignRepository;
         _templateRepository = templateRepository;
         _currentOrg = currentOrg;
+         _context = context;
         _clock = clock;
     }
 
@@ -242,7 +248,57 @@ public class CampaignsController : ControllerBase
 
         return Ok(new { scheduled = true, scheduledAt = campaign.ScheduledAt });
     }
+    [HttpGet("{id:guid}/notifications")]
+    public async Task<IActionResult> GetNotifications(
+        Guid id,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
 
+        var campaign = await _campaignRepository.GetByIdAsync(
+            id, _currentOrg.OrganizationId.Value, cancellationToken);
+
+        if (campaign is null)
+            return NotFound(new { error = "Campaign not found." });
+
+        var query = _context.Notifications
+            .Where(n => n.OrganizationId == _currentOrg.OrganizationId.Value)
+            .Where(n => _context.CampaignRecipients
+                .Where(r => r.CampaignId == id && r.NotificationId != null)
+                .Select(r => r.NotificationId)
+                .Contains(n.Id))
+            .OrderByDescending(n => n.CreatedAt);
+
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(n => new
+            {
+                n.PublicId,
+                n.RecipientEmail,
+                n.Type,
+                channel = n.Channel.ToString(),
+                status = n.Status.ToString(),
+                n.RetryCount,
+                n.CreatedAt
+            })
+            .ToListAsync(cancellationToken);
+
+        var failedCount = await _context.Notifications
+            .Where(n => n.OrganizationId == _currentOrg.OrganizationId.Value)
+            .Where(n => _context.CampaignRecipients
+                .Where(r => r.CampaignId == id && r.NotificationId != null)
+                .Select(r => r.NotificationId)
+                .Contains(n.Id))
+            .CountAsync(n => n.Status == NotificationStatus.DeadLetter ||
+                            n.Status == NotificationStatus.Failed, cancellationToken);
+
+        return Ok(new { items, totalCount = total, pageNumber = page, pageSize, failedCount });
+    }
     [HttpPost("{id:guid}/pause")]
     public async Task<IActionResult> Pause(Guid id, CancellationToken cancellationToken)
     {

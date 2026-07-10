@@ -2,7 +2,18 @@ import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { campaignApi } from '../api/campaignApi'
+import { apiClient } from '@/shared/services/apiClient'
 import type { CampaignDetail, CampaignStatus } from '../types/campaign.types'
+
+interface CampaignNotification {
+  publicId: string
+  recipientEmail: string
+  type: string
+  channel: string
+  status: string
+  retryCount: number
+  createdAt: string
+}
 
 const statusStyle: Record<CampaignStatus, string> = {
   Draft: 'bg-ink/10 text-ink/50',
@@ -32,12 +43,22 @@ export default function CampaignDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [scheduleMode, setScheduleMode] = useState(false)
   const [scheduledAt, setScheduledAt] = useState('')
+  const [notifications, setNotifications] = useState<CampaignNotification[]>([])
+  const [failedCount, setFailedCount] = useState(0)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
 
   async function load() {
     if (!id) return
     try {
-      const data = await campaignApi.getById(id)
+      const [data, notifData] = await Promise.all([
+        campaignApi.getById(id),
+        apiClient.get<{ items: CampaignNotification[]; failedCount: number }>(
+          `/api/v1/campaigns/${id}/notifications`
+        ),
+      ])
       setCampaign(data)
+      setNotifications(notifData.items)
+      setFailedCount(notifData.failedCount)
     } catch {
       navigate('/campaigns')
     } finally {
@@ -112,7 +133,6 @@ export default function CampaignDetailPage() {
       else if (action === 'pause') await campaignApi.pause(id)
       else if (action === 'resume') await campaignApi.resume(id)
       else if (action === 'delete') {
-        if (!confirm('Delete this campaign? This cannot be undone.')) return
         await campaignApi.delete(id)
         navigate('/campaigns')
         return
@@ -131,14 +151,45 @@ export default function CampaignDetailPage() {
 
   if (!campaign) return null
 
-  const isDraft = campaign.status === 'Draft'
-  const isRunning = campaign.status === 'Running'
-  const isPaused = campaign.status === 'Paused'
+  const isDraft = campaign.status?.toLowerCase() === 'draft'
+  const isRunning = campaign.status?.toLowerCase() === 'running'
+  const isPaused = campaign.status?.toLowerCase() === 'paused'
   const isEditable = isDraft || isPaused
   const canSend = isDraft && campaign.totalRecipients > 0
 
   return (
     <AppLayout>
+      {/* Delete confirmation modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)} />
+          <div className="relative bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
+            <div className="w-12 h-12 bg-coral/10 rounded-full flex items-center justify-center mb-4">
+              <span className="text-coral text-xl">✕</span>
+            </div>
+            <h3 className="font-display font-bold text-lg mb-1">Delete campaign?</h3>
+            <p className="text-sm text-ink/60 mb-6">
+              <span className="font-medium text-ink">"{campaign.title}"</span> will be permanently deleted.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={async () => { setShowDeleteModal(false); await handleAction('delete') }}
+                className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg text-sm font-medium hover:bg-coral/80 transition"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="flex-1 px-4 py-2.5 border border-ink/20 rounded-lg text-sm font-medium hover:bg-fog transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Header */}
       <div className="mb-6">
         <button
           onClick={() => navigate('/campaigns')}
@@ -158,6 +209,11 @@ export default function CampaignDetailPage() {
             <span className={`text-xs px-3 py-1 rounded-full font-medium ${statusStyle[campaign.status]}`}>
               {campaign.status}
             </span>
+            {failedCount > 0 && (
+              <span className="text-xs px-3 py-1 rounded-full font-medium bg-coral/10 text-coral">
+                {failedCount} failed
+              </span>
+            )}
 
             {isDraft && (
               <>
@@ -200,7 +256,7 @@ export default function CampaignDetailPage() {
 
             {!isRunning && (
               <button
-                onClick={() => handleAction('delete')}
+                onClick={() => setShowDeleteModal(true)}
                 className="px-4 py-2 border border-coral/30 text-coral text-sm rounded-lg hover:bg-coral/10 transition"
               >
                 Delete
@@ -209,7 +265,6 @@ export default function CampaignDetailPage() {
           </div>
         </div>
 
-        {/* Schedule picker */}
         {scheduleMode && (
           <div className="mt-4 flex items-center gap-3 bg-fog border border-ink/10 rounded-xl px-4 py-3">
             <input
@@ -239,7 +294,7 @@ export default function CampaignDetailPage() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-4 gap-4 mb-6">
         <div className="bg-fog border border-ink/10 rounded-xl p-5">
           <p className="font-display font-extrabold text-3xl text-teal">{campaign.stats.sent}</p>
           <p className="text-xs text-ink/50 mt-1">Sent</p>
@@ -248,14 +303,20 @@ export default function CampaignDetailPage() {
           <p className="font-display font-extrabold text-3xl text-violet">{campaign.stats.pending}</p>
           <p className="text-xs text-ink/50 mt-1">Pending</p>
         </div>
+        <div className={`border rounded-xl p-5 ${failedCount > 0 ? 'bg-coral/10 border-coral/20' : 'bg-fog border-ink/10'}`}>
+          <p className={`font-display font-extrabold text-3xl ${failedCount > 0 ? 'text-coral' : 'text-ink/30'}`}>
+            {failedCount}
+          </p>
+          <p className="text-xs text-ink/50 mt-1">Failed / DLQ</p>
+        </div>
         <div className="bg-fog border border-ink/10 rounded-xl p-5">
           <p className="font-display font-extrabold text-3xl text-ink">{campaign.stats.total}</p>
           <p className="text-xs text-ink/50 mt-1">Total Recipients</p>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        {/* Message */}
+      {/* Message + Add Recipients */}
+      <div className="grid lg:grid-cols-2 gap-6 mb-6">
         <div className="bg-fog border border-ink/10 rounded-xl p-6">
           <h2 className="font-display font-bold text-lg mb-3">Message</h2>
           <div
@@ -264,7 +325,6 @@ export default function CampaignDetailPage() {
           />
         </div>
 
-        {/* Add Recipients — shown for Draft and Paused */}
         {isEditable && (
           <div className="bg-fog border border-ink/10 rounded-xl p-6">
             <h2 className="font-display font-bold text-lg mb-1">Add Recipients</h2>
@@ -274,7 +334,6 @@ export default function CampaignDetailPage() {
                 : 'No recipients yet — add some to send this campaign'}
             </p>
 
-            {/* Mode tabs */}
             <div className="flex gap-2 mb-4">
               {(['paste', 'csv'] as InputMode[]).map(mode => (
                 <button
@@ -302,7 +361,7 @@ export default function CampaignDetailPage() {
                 <>
                   <textarea
                     className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet h-40 resize-none font-mono bg-white"
-                    placeholder={`user@example.com\nanother@example.com\nthird@example.com`}
+                    placeholder={`user@example.com\nanother@example.com`}
                     value={recipientInput}
                     onChange={e => setRecipientInput(e.target.value)}
                   />
@@ -358,6 +417,64 @@ export default function CampaignDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Notifications table */}
+      {notifications.length > 0 && (
+        <div className="mt-2">
+          <div className="flex items-center gap-3 mb-3">
+            <h2 className="font-display font-bold text-lg">Notifications</h2>
+            {failedCount > 0 && (
+              <span className="text-xs px-2 py-1 rounded-full bg-coral/10 text-coral font-medium">
+                {failedCount} failed / DLQ
+              </span>
+            )}
+          </div>
+          <div className="bg-white border border-ink/10 rounded-xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-fog/40 border-b border-ink/10">
+                <tr>
+                  <th className="text-left px-4 py-3 font-medium">Recipient</th>
+                  <th className="text-left px-4 py-3 font-medium">Status</th>
+                  <th className="text-left px-4 py-3 font-medium">Retries</th>
+                  <th className="text-left px-4 py-3 font-medium">Sent</th>
+                  <th className="text-left px-4 py-3 font-medium"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-ink/5">
+                {notifications.map(n => (
+                  <tr key={n.publicId} className="hover:bg-fog/20 transition">
+                    <td className="px-4 py-3 font-mono text-xs text-ink/70">{n.recipientEmail}</td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        n.status === 'Sent' ? 'bg-teal/10 text-teal' :
+                        n.status === 'DeadLetter' || n.status === 'Failed' ? 'bg-coral/10 text-coral' :
+                        n.status === 'Processing' || n.status === 'Retrying' ? 'bg-yellow/20 text-ink' :
+                        'bg-fog text-ink/50'
+                      }`}>
+                        {n.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-ink/40">{n.retryCount}</td>
+                    <td className="px-4 py-3 text-ink/40 text-xs">
+                      {new Date(n.createdAt).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3">
+                      {(n.status === 'DeadLetter' || n.status === 'Failed') && (
+                      <a
+                        href={`/notifications/${n.publicId}`}
+                        className="text-xs text-violet hover:underline"
+                      >
+                        View & retry →
+                      </a>
+                    )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </AppLayout>
   )
 }

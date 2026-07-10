@@ -22,6 +22,11 @@ public class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            // Client disconnected — not an error
+            return;
+        }
         catch (ValidationException ex)
         {
             var errors = ex.Errors.Select(e => e.ErrorMessage);
@@ -42,7 +47,6 @@ public class ExceptionHandlingMiddleware
                 new { error = "An unexpected error occurred." });
         }
     }
-
     private static async Task WriteResponse(HttpContext context, HttpStatusCode statusCode, object body)
     {
         context.Response.ContentType = "application/json";

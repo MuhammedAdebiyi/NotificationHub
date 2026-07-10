@@ -58,7 +58,11 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
-
+app.MapGet("/health", async (AppDbContext db) =>
+{
+    await db.Database.ExecuteSqlRawAsync("SELECT 1");
+    return Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
+});
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");

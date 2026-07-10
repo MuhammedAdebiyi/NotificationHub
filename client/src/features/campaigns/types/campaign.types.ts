@@ -1,5 +1,23 @@
-export type CampaignStatus = 'Draft' | 'Scheduled' | 'Running' | 'Paused' | 'Completed' | 'Cancelled' | 'Sent'
+export type CampaignStatus =
+  | 'Draft'
+  | 'Scheduled'
+  | 'Running'
+  | 'Paused'
+  | 'Completed'
+  | 'Cancelled'
+  | 'Sent'
+
 export type CampaignChannel = 'Email' | 'Sms' | 'Push' | 'InApp'
+
+export interface CampaignNotification {
+  publicId: string
+  recipientEmail: string
+  type: string
+  channel: string
+  status: string
+  retryCount: number
+  createdAt: string
+}
 
 export interface Campaign {
   id: string

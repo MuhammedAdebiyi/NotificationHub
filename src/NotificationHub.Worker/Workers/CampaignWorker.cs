@@ -23,6 +23,9 @@ public class CampaignWorker : BackgroundService
     {
         _logger.LogInformation("CampaignWorker started");
 
+        // Wait 10s on startup — lets Neon wake up before first query
+        await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
@@ -35,7 +38,6 @@ public class CampaignWorker : BackgroundService
                 _logger.LogError(ex, "Error in CampaignWorker loop");
             }
 
-            // Poll every 30 seconds
             await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
         }
     }
@@ -70,13 +72,11 @@ public class CampaignWorker : BackgroundService
         {
             _logger.LogInformation("Processing campaign {Id} — {Title}", campaign.Id, campaign.Title);
 
-            // Process in batches of 100
             var batch = await campaignRepository.GetUnprocessedRecipientsAsync(
                 campaign.Id, 100, stoppingToken);
 
             if (batch.Count == 0)
             {
-                // All recipients processed — mark complete
                 campaign.Status = CampaignStatus.Completed;
                 _logger.LogInformation("Campaign {Id} completed", campaign.Id);
                 await campaignRepository.SaveChangesAsync(stoppingToken);
@@ -101,7 +101,6 @@ public class CampaignWorker : BackgroundService
                 await notificationRepository.AddAsync(notification, stoppingToken);
                 await notificationRepository.SaveChangesAsync(stoppingToken);
 
-                // Link recipient to notification
                 recipient.NotificationId = notification.Id;
                 await queue.EnqueueAsync(notification.Id, stoppingToken);
 

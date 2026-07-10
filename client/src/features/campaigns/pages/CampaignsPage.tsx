@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { useCampaigns } from '../hooks/useCampaigns'
 import { campaignApi } from '../api/campaignApi'
+import { apiClient } from '@/shared/services/apiClient'
 import type { CampaignStatus } from '../types/campaign.types'
 
 const statusStyle: Record<CampaignStatus, string> = {
@@ -15,6 +16,12 @@ const statusStyle: Record<CampaignStatus, string> = {
   Cancelled: 'bg-ink/10 text-ink/40',
 }
 
+interface Template {
+  id: string
+  name: string
+  subject: string
+}
+
 export default function CampaignsPage() {
   const navigate = useNavigate()
   const { campaigns, totalCount, isLoading, error, reload } = useCampaigns()
@@ -23,6 +30,15 @@ export default function CampaignsPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
+  const [bodyMode, setBodyMode] = useState<'template' | 'custom'>('template')
+
+  useEffect(() => {
+    apiClient.get<{ items: Template[] }>('/api/v1/templates')
+      .then(res => setTemplates(res.items))
+      .catch(() => {})
+  }, [])
 
   const sent = campaigns.filter(c => c.status === 'Completed' || c.status === 'Sent').length
   const scheduled = campaigns.filter(c => c.status === 'Scheduled').length
@@ -38,11 +54,14 @@ export default function CampaignsPage() {
       const result = await campaignApi.create({
         title: form.title,
         subject: form.subject,
-        body: form.body,
-        channel: 0, // Email
+        body: bodyMode === 'custom' ? form.body : undefined,
+        templateId: bodyMode === 'template' && selectedTemplateId ? selectedTemplateId : undefined,
+        channel: 0,
       })
       setShowForm(false)
       setForm({ title: '', subject: '', body: '' })
+      setSelectedTemplateId('')
+      setBodyMode('template')
       navigate(`/campaigns/${result.id}`)
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Failed to create campaign.')
@@ -102,45 +121,120 @@ export default function CampaignsPage() {
 
       {showForm && (
         <div className="bg-white border border-ink/10 rounded-xl p-6 mb-6">
-          <h2 className="font-display font-bold text-lg mb-4">New Campaign</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display font-bold text-lg">New Campaign</h2>
+            <button
+              type="button"
+              onClick={() => { setShowForm(false); setCreateError(null) }}
+              className="text-ink/40 hover:text-ink text-sm"
+            >
+              Cancel
+            </button>
+          </div>
+
           {createError && (
             <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-xl mb-4">{createError}</div>
           )}
+
           <form onSubmit={handleCreate} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Campaign Name</label>
-              <input
-                className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet"
-                placeholder="e.g. July Product Update"
-                value={form.title}
-                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                required
-              />
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Campaign Name</label>
+                <input
+                  className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet"
+                  placeholder="e.g. July Product Update"
+                  value={form.title}
+                  onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Subject Line</label>
+                <input
+                  className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet"
+                  placeholder="e.g. What's new this month"
+                  value={form.subject}
+                  onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
+                  required
+                />
+              </div>
             </div>
+
+            {/* Body mode toggle */}
             <div>
-              <label className="block text-sm font-medium mb-1">Subject Line</label>
-              <input
-                className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet"
-                placeholder="e.g. What's new this month"
-                value={form.subject}
-                onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
-                required
-              />
+              <label className="block text-sm font-medium mb-2">Email Body</label>
+              <div className="flex items-center bg-fog rounded-lg p-1 gap-1 w-fit mb-3">
+                <button
+                  type="button"
+                  onClick={() => setBodyMode('template')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                    bodyMode === 'template' ? 'bg-white shadow-sm text-ink' : 'text-ink/50 hover:text-ink'
+                  }`}
+                >
+                  Use Template
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBodyMode('custom')}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium transition ${
+                    bodyMode === 'custom' ? 'bg-white shadow-sm text-ink' : 'text-ink/50 hover:text-ink'
+                  }`}
+                >
+                  Write Custom
+                </button>
+              </div>
+
+              {bodyMode === 'template' ? (
+                templates.length === 0 ? (
+                  <div className="border-2 border-dashed border-ink/15 rounded-xl p-8 text-center text-ink/40 text-sm">
+                    No templates yet —{' '}
+                    <a href="/templates" className="text-violet underline">create one first</a>
+                  </div>
+                ) : (
+                  <div className="grid sm:grid-cols-2 gap-3 max-h-64 overflow-y-auto">
+                    {templates.map(t => (
+                      <div
+                        key={t.id}
+                        onClick={() => setSelectedTemplateId(t.id)}
+                        className={`border rounded-xl p-4 cursor-pointer transition ${
+                          selectedTemplateId === t.id
+                            ? 'border-violet bg-violet/5'
+                            : 'border-ink/10 hover:border-ink/30 bg-fog/30'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium truncate">{t.name}</p>
+                            <p className="text-xs text-ink/40 mt-0.5 truncate">{t.subject}</p>
+                          </div>
+                          {selectedTemplateId === t.id && (
+                            <span className="shrink-0 text-xs bg-violet text-white px-2 py-0.5 rounded-full">
+                              Selected
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <textarea
+                  className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet h-32 resize-none"
+                  placeholder="Write your message here..."
+                  value={form.body}
+                  onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
+                />
+              )}
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Message Body</label>
-              <textarea
-                className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet h-32 resize-none"
-                placeholder="Write your message here..."
-                value={form.body}
-                onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
-                required
-              />
-            </div>
-            <div className="flex gap-3">
+
+            <div className="flex gap-3 pt-2">
               <button
                 type="submit"
-                disabled={creating}
+                disabled={
+                  creating ||
+                  (bodyMode === 'template' && !selectedTemplateId) ||
+                  (bodyMode === 'custom' && !form.body.trim())
+                }
                 className="px-4 py-2 bg-ink text-white rounded-lg text-sm font-medium hover:bg-violet transition disabled:opacity-50"
               >
                 {creating ? 'Creating...' : 'Create Draft'}
@@ -181,10 +275,7 @@ export default function CampaignsPage() {
             </thead>
             <tbody className="divide-y divide-ink/5">
               {campaigns.map(c => (
-                <tr
-                  key={c.id}
-                  className="hover:bg-fog/50 transition"
-                >
+                <tr key={c.id} className="hover:bg-fog/50 transition">
                   <td
                     className="px-4 py-3 cursor-pointer"
                     onClick={() => navigate(`/campaigns/${c.id}`)}
