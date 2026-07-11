@@ -2,9 +2,10 @@ namespace NotificationHub.Application.Abstractions;
 
 public interface IOrgNotificationService
 {
-    Task NotifyOrgAsync(
+    Task NotifyAsync(
         Guid organizationId,
         string subject,
-        string htmlBody,
+        string html,
+        string text,
         CancellationToken cancellationToken = default);
 }

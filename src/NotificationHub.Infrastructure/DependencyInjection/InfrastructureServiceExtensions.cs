@@ -11,6 +11,7 @@ using NotificationHub.Infrastructure.Messaging.Redis;
 using NotificationHub.Infrastructure.Repositories;
 using NotificationHub.Shared.Abstractions;
 using StackExchange.Redis;
+using NotificationHub.Infrastructure.Services;
 using NotificationHub.Infrastructure.Messaging;
 using System.Text;
 
@@ -51,8 +52,9 @@ public static class InfrastructureServiceExtensions
 
         // Campaigns
         services.AddScoped<ICampaignRepository, CampaignRepository>();
+        services.AddScoped<ICampaignService, CampaignService>();
         services.AddScoped<IOrgNotificationService, OrgNotificationService>();
-
+        
         // Email provider
         services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();
 

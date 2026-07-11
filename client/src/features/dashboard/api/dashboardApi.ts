@@ -1,16 +1,30 @@
-import { apiClient } from '@/shared/services/apiClient'
-import type { DashboardStats, ActivityItem } from '../types/dashboard.types'
+import type {
+  HealthBannerData,
+  TodayStats,
+  DeliveryPoint,
+  QueueStats,
+  CampaignSnapshot,
+  RecentFailure,
+  ActivityItem,
+  InfrastructureHealth,
+} from '../types'
+
+const BASE = '/api/v1'
+
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, { credentials: 'include' })
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  return res.json()
+}
 
 export const dashboardApi = {
-  getStats: () =>
-    apiClient.get<DashboardStats>('/api/v1/dashboard/stats'),
-
-  getActivity: () =>
-    apiClient.get<ActivityItem[]>('/api/v1/dashboard/activity'),
-
-  getVolume: () =>
-    apiClient.get<{ date: string; count: number }[]>('/api/v1/dashboard/volume'),
-
-  getOrgInfo: () =>
-    apiClient.get<{ name: string; plan: string; slug: string }>('/api/v1/org/info'),
+  getHealth:           () => get<HealthBannerData>('/analytics/health'),
+  getTodayStats:       () => get<TodayStats>('/analytics/overview'),
+  getDeliveryTimeline: () => get<DeliveryPoint[]>('/analytics/timeline'),
+  getQueue:            () => get<QueueStats>('/analytics/queue'),
+  getCampaignSnapshot: () => get<CampaignSnapshot>('/analytics/campaigns'),
+  getRecentFailures:   () => get<RecentFailure[]>('/analytics/failures'),
+  getActivity:         () => get<ActivityItem[]>('/analytics/activity'),
+  getInfrastructure:   () => get<InfrastructureHealth>('/analytics/system'),
+  getOrgInfo:          () => get<{ name: string }>('/org/info'),
 }

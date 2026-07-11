@@ -15,6 +15,7 @@ public class Campaign : AuditableEntity
     public DateTime? ScheduledAt { get; set; }
     public DateTime? StartedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
+    public DateTime? StartNotificationSentAt { get; set; }
     public int TotalRecipients { get; set; }
 
     public Organization? Organization { get; set; }

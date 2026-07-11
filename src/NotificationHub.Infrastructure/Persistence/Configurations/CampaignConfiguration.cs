@@ -22,6 +22,10 @@ public class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
             .HasForeignKey(c => c.CreatedByUserId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        builder.Property<uint>("xmin")
+            .HasColumnName("xmin")
+            .IsRowVersion();
+        
         builder.HasMany(c => c.Recipients)
             .WithOne(r => r.Campaign)
             .HasForeignKey(r => r.CampaignId);

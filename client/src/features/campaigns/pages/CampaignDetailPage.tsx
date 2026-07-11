@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { campaignApi } from '../api/campaignApi'
 import { apiClient } from '@/shared/services/apiClient'
+import CampaignProgressPanel from "@/features/campaigns/components/CampaignProgressPanel";
 import type { CampaignDetail, CampaignStatus } from '../types/campaign.types'
 
 interface CampaignNotification {
@@ -506,34 +507,9 @@ export default function CampaignDetailPage() {
             </p>
           </div>
         )}
-        {/* Live activity feed — auto-refreshes when running */}
-        {isRunning && (
-          <div className="mb-6 bg-yellow/5 border border-yellow/20 rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-              <p className="text-sm font-medium">Live — sending in progress</p>
-              <span className="text-xs text-ink/40">updates every 5s</span>
-            </div>
-            <div className="grid grid-cols-3 gap-3 text-center">
-              <div>
-                <p className="font-display font-bold text-2xl text-teal">{campaign.stats.sent}</p>
-                <p className="text-xs text-ink/50">Sent</p>
-              </div>
-              <div>
-                <p className="font-display font-bold text-2xl text-violet">{campaign.stats.pending}</p>
-                <p className="text-xs text-ink/50">Queued</p>
-              </div>
-              <div>
-                <p className="font-display font-bold text-2xl text-ink">{campaign.stats.total}</p>
-                <p className="text-xs text-ink/50">Total</p>
-              </div>
-            </div>
-            {campaign.startedAt && (
-              <p className="text-xs text-ink/40 mt-3 text-center">
-                Started {new Date(campaign.startedAt).toLocaleString()}
-              </p>
-            )}
-          </div>
+        {/* Live Progress Feed — shows when Running or just Completed */}
+        {(isRunning || campaign.status?.toLowerCase() === 'completed') && (
+          <CampaignProgressPanel campaignId={campaign.id} isRunning={isRunning} />
         )}
         </div> 
       )}

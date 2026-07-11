@@ -2,12 +2,10 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Abstractions;
-using NotificationHub.Domain.Entities;
-using NotificationHub.Domain.Enums;
 using NotificationHub.Shared.Abstractions;
 using NotificationHub.Infrastructure.Persistence;
+using NotificationHub.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
-using System.Text.Json;
 
 namespace NotificationHub.Api.Controllers;
 
@@ -17,121 +15,25 @@ namespace NotificationHub.Api.Controllers;
 [Authorize]
 public class CampaignsController : ControllerBase
 {
+    private readonly ICampaignService _campaignService;
     private readonly ICampaignRepository _campaignRepository;
-    private readonly ITemplateRepository _templateRepository;
-    private readonly IUserRepository _userRepository;
-    private readonly IOrgNotificationService _orgNotifier;
     private readonly ICurrentOrganization _currentOrg;
     private readonly ICurrentUser _currentUser;
-    private readonly IClock _clock;
     private readonly AppDbContext _context;
 
     public CampaignsController(
+        ICampaignService campaignService,
         ICampaignRepository campaignRepository,
-        ITemplateRepository templateRepository,
-        IUserRepository userRepository,
-        IOrgNotificationService orgNotifier,
-        AppDbContext context,
         ICurrentOrganization currentOrg,
         ICurrentUser currentUser,
-        IClock clock)
+        AppDbContext context)
     {
+        _campaignService = campaignService;
         _campaignRepository = campaignRepository;
-        _templateRepository = templateRepository;
-        _userRepository = userRepository;
-        _orgNotifier = orgNotifier;
         _currentOrg = currentOrg;
         _currentUser = currentUser;
         _context = context;
-        _clock = clock;
     }
-
-    private static string StripHtml(string html)
-    {
-        var stripped = System.Text.RegularExpressions.Regex.Replace(html ?? "", "<[^>]+>", "");
-        return stripped.Length > 300 ? stripped[..300] + "..." : stripped;
-    }
-
-    private static string BuildCreatedEmail(
-        string title, string subject, string creatorName,
-        string creatorEmail, string creatorId, string bodyPreview,
-        string? scheduledTime) => $"""
-        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e">
-          <div style="background:#7c3aed;padding:32px;border-radius:12px 12px 0 0">
-            <h1 style="margin:0;color:white;font-size:22px;font-weight:700"> New Campaign Created</h1>
-            <p style="margin:8px 0 0;color:rgba(255,255,255,0.8);font-size:14px">A new campaign draft is ready</p>
-          </div>
-          <div style="background:#fafafa;border:1px solid #eee;border-top:none;border-radius:0 0 12px 12px;padding:32px">
-            <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;width:140px;border-bottom:1px solid #f0f0f0">Campaign</td><td style="padding:10px 12px;font-weight:600;border-bottom:1px solid #f0f0f0">{title}</td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0;background:#fff">Subject</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;background:#fff">{subject}</td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0">Created by</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0">{creatorName} <span style="color:#888;font-size:12px">({creatorEmail})</span></td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0;background:#fff">Creator ID</td><td style="padding:10px 12px;font-size:12px;font-family:monospace;color:#888;border-bottom:1px solid #f0f0f0;background:#fff">{creatorId}</td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0">Status</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0"><span style="background:#f0f0f0;color:#666;padding:2px 10px;border-radius:20px;font-size:12px">Draft</span></td></tr>
-              {(scheduledTime != null ? $"<tr><td style=\"padding:10px 12px;color:#888;font-size:13px;background:#fff\">Scheduled for</td><td style=\"padding:10px 12px;font-weight:600;color:#7c3aed;background:#fff\">{scheduledTime}</td></tr>" : "")}
-            </table>
-            <div style="background:white;border:1px solid #e8e8e8;border-left:4px solid #7c3aed;border-radius:0 8px 8px 0;padding:16px 20px">
-              <p style="margin:0 0 8px;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:600">Message Preview</p>
-              <p style="margin:0;color:#444;font-size:14px;line-height:1.7">{bodyPreview}</p>
-            </div>
-            <p style="color:#bbb;font-size:11px;margin-top:24px;text-align:center">You're receiving this because you're a member of this organization on NotificationHub.</p>
-          </div>
-        </div>
-        """;
-
-    private static string BuildSendingNowEmail(
-        string title, string subject, string senderName,
-        string senderEmail, string senderId, int recipients,
-        string startedTime, string bodyPreview) => $"""
-        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e">
-          <div style="background:#7c3aed;padding:32px;border-radius:12px 12px 0 0">
-            <h1 style="margin:0;color:white;font-size:22px;font-weight:700"> Campaign Sending Now</h1>
-            <p style="margin:8px 0 0;color:rgba(255,255,255,0.8);font-size:14px">Emails are being delivered to recipients</p>
-          </div>
-          <div style="background:#fafafa;border:1px solid #eee;border-top:none;border-radius:0 0 12px 12px;padding:32px">
-            <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;width:140px;border-bottom:1px solid #f0f0f0">Campaign</td><td style="padding:10px 12px;font-weight:600;border-bottom:1px solid #f0f0f0">{title}</td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0;background:#fff">Subject</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;background:#fff">{subject}</td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0">Started at</td><td style="padding:10px 12px;font-weight:600;color:#7c3aed;border-bottom:1px solid #f0f0f0">{startedTime}</td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0;background:#fff">Recipients</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;background:#fff">{recipients:N0}</td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0">Sent by</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0">{senderName} <span style="color:#888;font-size:12px">({senderEmail})</span></td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;background:#fff">Sender ID</td><td style="padding:10px 12px;font-size:12px;font-family:monospace;color:#888;background:#fff">{senderId}</td></tr>
-            </table>
-            <div style="background:white;border:1px solid #e8e8e8;border-left:4px solid #7c3aed;border-radius:0 8px 8px 0;padding:16px 20px">
-              <p style="margin:0 0 8px;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:600">Message Preview</p>
-              <p style="margin:0;color:#444;font-size:14px;line-height:1.7">{bodyPreview}</p>
-            </div>
-            <p style="color:#bbb;font-size:11px;margin-top:24px;text-align:center">You're receiving this because you're a member of this organization on NotificationHub.</p>
-          </div>
-        </div>
-        """;
-
-    private static string BuildScheduledEmail(
-        string title, string subject, string scheduledTime,
-        int recipients, string schedulerName, string schedulerEmail,
-        string schedulerId, string bodyPreview) => $"""
-        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#1a1a2e">
-          <div style="background:#7c3aed;padding:32px;border-radius:12px 12px 0 0">
-            <h1 style="margin:0;color:white;font-size:22px;font-weight:700"> Campaign Scheduled</h1>
-            <p style="margin:8px 0 0;color:rgba(255,255,255,0.8);font-size:14px">This campaign will send automatically</p>
-          </div>
-          <div style="background:#fafafa;border:1px solid #eee;border-top:none;border-radius:0 0 12px 12px;padding:32px">
-            <table style="width:100%;border-collapse:collapse;margin-bottom:24px">
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;width:140px;border-bottom:1px solid #f0f0f0">Campaign</td><td style="padding:10px 12px;font-weight:600;border-bottom:1px solid #f0f0f0">{title}</td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0;background:#fff">Subject</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;background:#fff">{subject}</td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0">Sends at</td><td style="padding:10px 12px;font-weight:700;color:#7c3aed;font-size:15px;border-bottom:1px solid #f0f0f0">{scheduledTime}</td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0;background:#fff">Recipients</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0;background:#fff">{recipients:N0}</td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;border-bottom:1px solid #f0f0f0">Scheduled by</td><td style="padding:10px 12px;border-bottom:1px solid #f0f0f0">{schedulerName} <span style="color:#888;font-size:12px">({schedulerEmail})</span></td></tr>
-              <tr><td style="padding:10px 12px;color:#888;font-size:13px;background:#fff">Scheduler ID</td><td style="padding:10px 12px;font-size:12px;font-family:monospace;color:#888;background:#fff">{schedulerId}</td></tr>
-            </table>
-            <div style="background:white;border:1px solid #e8e8e8;border-left:4px solid #7c3aed;border-radius:0 8px 8px 0;padding:16px 20px">
-              <p style="margin:0 0 8px;color:#888;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:600">Message Preview</p>
-              <p style="margin:0;color:#444;font-size:14px;line-height:1.7">{bodyPreview}</p>
-            </div>
-            <p style="color:#bbb;font-size:11px;margin-top:24px;text-align:center">You're receiving this because you're a member of this organization on NotificationHub.</p>
-          </div>
-        </div>
-        """;
 
     [HttpGet]
     public async Task<IActionResult> GetAll(
@@ -191,58 +93,80 @@ public class CampaignsController : ControllerBase
         if (_currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
-        var orgId = _currentOrg.OrganizationId.Value;
-        var body = request.Body;
-
-        if (request.TemplateId.HasValue)
+        try
         {
-            var template = await _templateRepository.GetByIdAsync(
-                request.TemplateId.Value, orgId, cancellationToken);
-            if (template is null)
-                return BadRequest(new { error = "Template not found." });
-            body = template.Body;
+            var campaign = await _campaignService.CreateAsync(new(
+                _currentOrg.OrganizationId.Value,
+                _currentUser.UserId,
+                request.Title,
+                request.Subject,
+                request.Body,
+                request.TemplateId,
+                request.Channel,
+                request.ScheduledAt
+            ), cancellationToken);
+
+            return Ok(new { campaign.Id, campaign.Title, campaign.Status });
         }
-
-        if (string.IsNullOrWhiteSpace(body))
-            return BadRequest(new { error = "Body or TemplateId is required." });
-
-        var campaign = new Campaign
+        catch (InvalidOperationException ex)
         {
-            OrganizationId = orgId,
-            CreatedByUserId = _currentUser.UserId,
-            Title = request.Title,
-            Subject = request.Subject,
-            Message = body,
-            Channel = request.Channel,
-            Status = CampaignStatus.Draft,
-            ScheduledAt = request.ScheduledAt,
-        };
-
-        await _campaignRepository.AddAsync(campaign, cancellationToken);
-        await _campaignRepository.SaveChangesAsync(cancellationToken);
-
-        var creator = _currentUser.UserId.HasValue
-            ? await _userRepository.GetByIdAsync(_currentUser.UserId.Value, cancellationToken)
-            : null;
-
-        var creatorName = creator?.FullName ?? "A team member";
-        var creatorEmail = creator?.Email ?? "—";
-        var bodyPreview = StripHtml(body);
-        var scheduledTime = request.ScheduledAt.HasValue
-            ? request.ScheduledAt.Value.ToString("dddd, MMMM d yyyy 'at' h:mm tt")
-            : null;
-
-        await _orgNotifier.NotifyOrgAsync(
-            orgId,
-            $"New campaign created: {campaign.Title}",
-            BuildCreatedEmail(campaign.Title, campaign.Subject, creatorName,
-                creatorEmail, _currentUser.UserId?.ToString() ?? "—",
-                bodyPreview, scheduledTime),
-            cancellationToken);
-
-        return Ok(new { campaign.Id, campaign.Title, campaign.Status });
+            return BadRequest(new { error = ex.Message });
+        }
     }
+    
+    [HttpGet("{id:guid}/progress")]
+    public async Task<IActionResult> GetProgress(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
 
+        var campaign = await _campaignRepository.GetByIdAsync(
+            id, _currentOrg.OrganizationId.Value, cancellationToken);
+
+        if (campaign is null)
+            return NotFound(new { error = "Campaign not found." });
+
+        var orgId = _currentOrg.OrganizationId.Value;
+
+        // Recipients not yet turned into notifications
+        var unqueued = campaign.Recipients.Count(r => r.NotificationId == null);
+
+        // Notifications linked to this campaign
+        var notifQuery = _context.Notifications
+            .Where(n => n.OrganizationId == orgId)
+            .Where(n => _context.CampaignRecipients
+                .Where(r => r.CampaignId == id && r.NotificationId != null)
+                .Select(r => r.NotificationId)
+                .Contains(n.Id));
+
+        var pending      = await notifQuery.CountAsync(n => n.Status == NotificationStatus.Pending, cancellationToken);
+        var processing   = await notifQuery.CountAsync(n => n.Status == NotificationStatus.Processing, cancellationToken);
+        var retrying     = await notifQuery.CountAsync(n => n.Status == NotificationStatus.Retrying, cancellationToken);
+        var sent         = await notifQuery.CountAsync(n => n.Status == NotificationStatus.Sent, cancellationToken);
+        var failed       = await notifQuery.CountAsync(n => n.Status == NotificationStatus.Failed, cancellationToken);
+        var deadLetter   = await notifQuery.CountAsync(n => n.Status == NotificationStatus.DeadLetter, cancellationToken);
+
+        var total = campaign.TotalRecipients;
+        var processed = sent + failed + deadLetter;
+        var progressPct = total > 0 ? Math.Round((double)processed / total * 100, 1) : 0;
+
+        return Ok(new
+        {
+            campaignId = id,
+            status = campaign.Status.ToString(),
+            total,
+            unqueued,
+            pending,
+            processing,
+            retrying,
+            sent,
+            failed,
+            deadLetter,
+            progressPercent = progressPct,
+            startedAt = campaign.StartedAt,
+            completedAt = campaign.CompletedAt,
+        });
+    }
     [HttpPost("{id:guid}/recipients")]
     public async Task<IActionResult> AddRecipients(
         Guid id,
@@ -252,48 +176,18 @@ public class CampaignsController : ControllerBase
         if (_currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
-        var campaign = await _campaignRepository.GetByIdAsync(
-            id, _currentOrg.OrganizationId.Value, cancellationToken);
-
-        if (campaign is null)
-            return NotFound(new { error = "Campaign not found." });
-
-        if (campaign.Status != CampaignStatus.Draft)
-            return BadRequest(new { error = "Can only add recipients to a draft campaign." });
-
-        var emails = request.Emails
-            .SelectMany(e => e.Split(new[] { ',', '\n', '\r', ';' }, StringSplitOptions.RemoveEmptyEntries))
-            .Select(e => e.Trim().ToLowerInvariant())
-            .Where(e => e.Contains('@'))
-            .Distinct()
-            .ToList();
-
-        if (emails.Count == 0)
-            return BadRequest(new { error = "No valid email addresses found." });
-
-        var newRecipients = new List<CampaignRecipient>();
-        foreach (var email in emails)
+        try
         {
-            var exists = await _campaignRepository.RecipientExistsAsync(id, email, cancellationToken);
-            if (!exists)
-            {
-                newRecipients.Add(new CampaignRecipient
-                {
-                    CampaignId = id,
-                    OrganizationId = _currentOrg.OrganizationId.Value,
-                    RecipientEmail = email,
-                });
-            }
-        }
+            var result = await _campaignService.AddRecipientsAsync(new(
+                id, _currentOrg.OrganizationId.Value, request.Emails
+            ), cancellationToken);
 
-        if (newRecipients.Count > 0)
+            return Ok(new { added = result.Added, skipped = result.Skipped });
+        }
+        catch (InvalidOperationException ex)
         {
-            await _campaignRepository.AddRecipientsAsync(newRecipients, cancellationToken);
-            campaign.TotalRecipients += newRecipients.Count;
-            await _campaignRepository.SaveChangesAsync(cancellationToken);
+            return BadRequest(new { error = ex.Message });
         }
-
-        return Ok(new { added = newRecipients.Count, skipped = emails.Count - newRecipients.Count });
     }
 
     [HttpPost("{id:guid}/send")]
@@ -302,40 +196,16 @@ public class CampaignsController : ControllerBase
         if (_currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
-        var campaign = await _campaignRepository.GetByIdAsync(
-            id, _currentOrg.OrganizationId.Value, cancellationToken);
-
-        if (campaign is null)
-            return NotFound(new { error = "Campaign not found." });
-
-        if (campaign.Status != CampaignStatus.Draft && campaign.Status != CampaignStatus.Paused)
-            return BadRequest(new { error = "Campaign must be in Draft or Paused state to send." });
-
-        if (campaign.TotalRecipients == 0)
-            return BadRequest(new { error = "Add recipients before sending." });
-
-        campaign.Status = CampaignStatus.Running;
-        campaign.StartedAt = _clock.UtcNow;
-        await _campaignRepository.SaveChangesAsync(cancellationToken);
-
-        var sender = _currentUser.UserId.HasValue
-            ? await _userRepository.GetByIdAsync(_currentUser.UserId.Value, cancellationToken)
-            : null;
-
-        var senderName = sender?.FullName ?? "A team member";
-        var senderEmail = sender?.Email ?? "—";
-        var startedTime = campaign.StartedAt?.ToString("h:mm tt, MMM d yyyy") ?? "now";
-        var bodyPreview = StripHtml(campaign.Message);
-
-        await _orgNotifier.NotifyOrgAsync(
-            _currentOrg.OrganizationId.Value,
-            $"Campaign sending now: {campaign.Title}",
-            BuildSendingNowEmail(campaign.Title, campaign.Subject, senderName,
-                senderEmail, _currentUser.UserId?.ToString() ?? "—",
-                campaign.TotalRecipients, startedTime, bodyPreview),
-            cancellationToken);
-
-        return Ok(new { started = true, campaignId = campaign.Id });
+        try
+        {
+            await _campaignService.SendAsync(
+                id, _currentOrg.OrganizationId.Value, _currentUser.UserId, cancellationToken);
+            return Ok(new { started = true, campaignId = id });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost("{id:guid}/schedule")]
@@ -347,43 +217,16 @@ public class CampaignsController : ControllerBase
         if (_currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
-        var campaign = await _campaignRepository.GetByIdAsync(
-            id, _currentOrg.OrganizationId.Value, cancellationToken);
-
-        if (campaign is null)
-            return NotFound(new { error = "Campaign not found." });
-
-        if (campaign.Status != CampaignStatus.Draft)
-            return BadRequest(new { error = "Only draft campaigns can be scheduled." });
-
-        if (request.ScheduledAt <= _clock.UtcNow)
-            return BadRequest(new { error = "Scheduled time must be in the future." });
-
-        if (campaign.TotalRecipients == 0)
-            return BadRequest(new { error = "Add recipients before scheduling." });
-
-        campaign.Status = CampaignStatus.Scheduled;
-        campaign.ScheduledAt = request.ScheduledAt;
-        await _campaignRepository.SaveChangesAsync(cancellationToken);
-
-        var scheduler = _currentUser.UserId.HasValue
-            ? await _userRepository.GetByIdAsync(_currentUser.UserId.Value, cancellationToken)
-            : null;
-
-        var schedulerName = scheduler?.FullName ?? "A team member";
-        var schedulerEmail = scheduler?.Email ?? "—";
-        var scheduledTime = campaign.ScheduledAt?.ToString("dddd, MMMM d yyyy 'at' h:mm tt") ?? "—";
-        var bodyPreview = StripHtml(campaign.Message);
-
-        await _orgNotifier.NotifyOrgAsync(
-            _currentOrg.OrganizationId.Value,
-            $"Campaign scheduled: {campaign.Title}",
-            BuildScheduledEmail(campaign.Title, campaign.Subject, scheduledTime,
-                campaign.TotalRecipients, schedulerName, schedulerEmail,
-                _currentUser.UserId?.ToString() ?? "—", bodyPreview),
-            cancellationToken);
-
-        return Ok(new { scheduled = true, scheduledAt = campaign.ScheduledAt });
+        try
+        {
+            await _campaignService.ScheduleAsync(
+                id, _currentOrg.OrganizationId.Value, request.ScheduledAt, cancellationToken);
+            return Ok(new { scheduled = true, scheduledAt = request.ScheduledAt });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpGet("{id:guid}/notifications")]
@@ -402,13 +245,12 @@ public class CampaignsController : ControllerBase
         if (campaign is null)
             return NotFound(new { error = "Campaign not found." });
 
-        var linkedIds = _context.CampaignRecipients
-            .Where(r => r.CampaignId == id && r.NotificationId != null)
-            .Select(r => r.NotificationId);
-
         var query = _context.Notifications
             .Where(n => n.OrganizationId == _currentOrg.OrganizationId.Value)
-            .Where(n => linkedIds.Contains(n.Id))
+            .Where(n => _context.CampaignRecipients
+                .Where(r => r.CampaignId == id && r.NotificationId != null)
+                .Select(r => r.NotificationId)
+                .Contains(n.Id))
             .OrderByDescending(n => n.CreatedAt);
 
         var total = await query.CountAsync(cancellationToken);
@@ -425,8 +267,9 @@ public class CampaignsController : ControllerBase
             .ToListAsync(cancellationToken);
 
         var failedCount = await query
-            .CountAsync(n => n.Status == NotificationStatus.DeadLetter ||
-                             n.Status == NotificationStatus.Failed, cancellationToken);
+            .CountAsync(n =>
+                n.Status == NotificationStatus.DeadLetter ||
+                n.Status == NotificationStatus.Failed, cancellationToken);
 
         return Ok(new { items, totalCount = total, pageNumber = page, pageSize, failedCount });
     }
@@ -437,19 +280,15 @@ public class CampaignsController : ControllerBase
         if (_currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
-        var campaign = await _campaignRepository.GetByIdAsync(
-            id, _currentOrg.OrganizationId.Value, cancellationToken);
-
-        if (campaign is null)
-            return NotFound(new { error = "Campaign not found." });
-
-        if (campaign.Status != CampaignStatus.Running)
-            return BadRequest(new { error = "Only running campaigns can be paused." });
-
-        campaign.Status = CampaignStatus.Paused;
-        await _campaignRepository.SaveChangesAsync(cancellationToken);
-
-        return Ok(new { paused = true });
+        try
+        {
+            await _campaignService.PauseAsync(id, _currentOrg.OrganizationId.Value, cancellationToken);
+            return Ok(new { paused = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpPost("{id:guid}/resume")]
@@ -458,20 +297,15 @@ public class CampaignsController : ControllerBase
         if (_currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
-        var campaign = await _campaignRepository.GetByIdAsync(
-            id, _currentOrg.OrganizationId.Value, cancellationToken);
-
-        if (campaign is null)
-            return NotFound(new { error = "Campaign not found." });
-
-        if (campaign.Status != CampaignStatus.Paused)
-            return BadRequest(new { error = "Only paused campaigns can be resumed." });
-
-        campaign.Status = CampaignStatus.Running;
-        campaign.StartedAt ??= _clock.UtcNow;
-        await _campaignRepository.SaveChangesAsync(cancellationToken);
-
-        return Ok(new { resumed = true });
+        try
+        {
+            await _campaignService.ResumeAsync(id, _currentOrg.OrganizationId.Value, cancellationToken);
+            return Ok(new { resumed = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 
     [HttpDelete("{id:guid}")]
@@ -480,29 +314,20 @@ public class CampaignsController : ControllerBase
         if (_currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
-        var campaign = await _campaignRepository.GetByIdAsync(
-            id, _currentOrg.OrganizationId.Value, cancellationToken);
-
-        if (campaign is null)
-            return NotFound(new { error = "Campaign not found." });
-
-        if (campaign.Status == CampaignStatus.Running)
-            return BadRequest(new { error = "Pause the campaign before deleting." });
-
-        campaign.DeletedAt = _clock.UtcNow;
-        await _campaignRepository.SaveChangesAsync(cancellationToken);
-
-        return Ok(new { deleted = true });
+        try
+        {
+            await _campaignService.DeleteAsync(id, _currentOrg.OrganizationId.Value, cancellationToken);
+            return Ok(new { deleted = true });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
 }
 
 public record CreateCampaignRequest(
-    string Title,
-    string Subject,
-    string? Body,
-    Guid? TemplateId,
-    NotificationChannel Channel,
-    DateTime? ScheduledAt
-);
+    string Title, string Subject, string? Body,
+    Guid? TemplateId, NotificationChannel Channel, DateTime? ScheduledAt);
 public record AddRecipientsRequest(List<string> Emails);
 public record ScheduleCampaignRequest(DateTime ScheduledAt);
