@@ -9,8 +9,12 @@ namespace NotificationHub.Worker.Workers;
 
 public class NotificationWorker : BackgroundService
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IConnectionMultiplexer _redis;
+    // Each worker instance gets a unique ID so Analytics can count
+    // individual workers via the "worker:heartbeat:*" key pattern.
+    private readonly string _workerId = $"notification-{Guid.NewGuid():N}";
+
+    private readonly IServiceScopeFactory      _scopeFactory;
+    private readonly IConnectionMultiplexer    _redis;
     private readonly ILogger<NotificationWorker> _logger;
 
     public NotificationWorker(
@@ -19,16 +23,17 @@ public class NotificationWorker : BackgroundService
         ILogger<NotificationWorker> logger)
     {
         _scopeFactory = scopeFactory;
-        _redis = redis;
-        _logger = logger;
+        _redis        = redis;
+        _logger       = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("NotificationWorker started");
+        _logger.LogInformation("NotificationWorker {WorkerId} started", _workerId);
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            // Heartbeat first — Analytics reads these keys to count online workers.
             await WriteHeartbeatAsync(stoppingToken);
 
             try
@@ -46,28 +51,52 @@ public class NotificationWorker : BackgroundService
             }
         }
 
-        _logger.LogInformation("NotificationWorker stopped");
+        // Remove heartbeat immediately on clean shutdown so Analytics
+        // doesn't report a ghost worker for the remaining TTL window.
+        await RemoveHeartbeatAsync();
+
+        _logger.LogInformation("NotificationWorker {WorkerId} stopped", _workerId);
     }
+
+    // ─── Heartbeat ───────────────────────────────────────────────────────────
 
     private async Task WriteHeartbeatAsync(CancellationToken stoppingToken)
     {
         try
         {
             var db = _redis.GetDatabase();
+
+            
+            // TTL = 10 seconds. If the worker crashes the key expires automatically
+            // and Analytics correctly reports it as offline.
             await db.StringSetAsync(
-                "worker:online:count",
-                "1",
-                TimeSpan.FromSeconds(60));
+                key:   $"worker:heartbeat:{_workerId}",
+                value: DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
+                expiry: TimeSpan.FromSeconds(10));
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to write worker heartbeat to Redis");
+            _logger.LogWarning(ex, "Failed to write heartbeat for worker {WorkerId}", _workerId);
         }
     }
 
+    private async Task RemoveHeartbeatAsync()
+    {
+        try
+        {
+            await _redis.GetDatabase().KeyDeleteAsync($"worker:heartbeat:{_workerId}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to remove heartbeat for worker {WorkerId}", _workerId);
+        }
+    }
+
+    // ─── Processing ──────────────────────────────────────────────────────────
+
     private async Task ProcessNextAsync(CancellationToken stoppingToken)
     {
-        var db = _redis.GetDatabase();
+        var db    = _redis.GetDatabase();
         var value = await db.ListRightPopAsync("notification_queue");
 
         if (value.IsNullOrEmpty)
@@ -82,9 +111,9 @@ public class NotificationWorker : BackgroundService
             return;
         }
 
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var repository = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
-        var provider = scope.ServiceProvider.GetRequiredService<INotificationProvider>();
+        await using var scope      = _scopeFactory.CreateAsyncScope();
+        var repository             = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
+        var provider               = scope.ServiceProvider.GetRequiredService<INotificationProvider>();
 
         var notification = await repository.GetByIdAsync(notificationId, stoppingToken);
         if (notification is null)
@@ -103,7 +132,8 @@ public class NotificationWorker : BackgroundService
 
         if (success)
         {
-            notification.Status = NotificationStatus.Sent;
+            notification.Status      = NotificationStatus.Sent;
+            notification.ProcessedAt = DateTime.UtcNow;   // ← kills the AvgSendTimeMs TODO
             await repository.SaveChangesAsync(stoppingToken);
             _logger.LogInformation("Notification {Id} sent successfully", notification.Id);
         }
@@ -129,7 +159,8 @@ public class NotificationWorker : BackgroundService
             await repository.SaveChangesAsync(stoppingToken);
 
             var delay = delays[notification.RetryCount - 1];
-            _logger.LogWarning("Notification {Id} failed, retrying in {Delay}s (attempt {Attempt})",
+            _logger.LogWarning(
+                "Notification {Id} failed, retrying in {Delay}s (attempt {Attempt})",
                 notification.Id, delay, notification.RetryCount);
 
             await Task.Delay(TimeSpan.FromSeconds(delay), stoppingToken);
@@ -137,11 +168,13 @@ public class NotificationWorker : BackgroundService
         }
         else
         {
-            notification.Status = NotificationStatus.DeadLetter;
+            notification.Status      = NotificationStatus.DeadLetter;
+            notification.ProcessedAt = DateTime.UtcNow;   // record when it finally gave up
             await repository.SaveChangesAsync(stoppingToken);
 
             await db.ListLeftPushAsync("notification_dlq", notification.Id.ToString());
-            _logger.LogError("Notification {Id} moved to DLQ after {Attempts} attempts",
+            _logger.LogError(
+                "Notification {Id} moved to DLQ after {Attempts} attempts",
                 notification.Id, notification.RetryCount);
         }
     }

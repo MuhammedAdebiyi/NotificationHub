@@ -1,9 +1,9 @@
 import AppLayout from '@/app/layouts/AppLayout'
 import { useAnalytics } from '../hooks/useAnalytics'
-import type { TopCampaign, FailureDto } from '../types/analytics.types'
+import type { RecentCampaign, FailureDto } from '../types/analytics.types'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, BarChart, Bar, Cell
+  ResponsiveContainer, BarChart, Bar, Cell,
 } from 'recharts'
 
 function KpiCard({
@@ -19,8 +19,8 @@ function KpiCard({
 }) {
   const colors = {
     violet: 'text-violet',
-    teal: 'text-teal',
-    coral: 'text-coral',
+    teal:   'text-teal',
+    coral:  'text-coral',
     yellow: 'text-ink',
   }
   return (
@@ -54,7 +54,7 @@ export default function AnalyticsPage() {
     )
   }
 
-  const total = funnel
+  const funnelTotal = funnel
     ? funnel.queued + funnel.processing + funnel.sent + funnel.failed + funnel.deadLetter
     : 0
 
@@ -75,14 +75,21 @@ export default function AnalyticsPage() {
         <KpiCard
           label="Success Rate"
           value={overview ? `${overview.successRate}%` : '—'}
-          sub={overview?.successRateDelta !== 0
-            ? `${overview!.successRateDelta > 0 ? '+' : ''}${overview!.successRateDelta}% vs yesterday`
-            : undefined}
+          sub={
+            overview?.successRateDelta !== 0
+              ? `${overview!.successRateDelta > 0 ? '+' : ''}${overview!.successRateDelta}% vs yesterday`
+              : undefined
+          }
           accent="violet"
         />
         <KpiCard
           label="Dead Letters"
           value={overview?.deadLetters.toLocaleString() ?? '—'}
+          sub={
+            overview?.deadLettersNeedingReview
+              ? `${overview.deadLettersNeedingReview} need review`
+              : undefined
+          }
           accent="coral"
         />
         <KpiCard
@@ -93,13 +100,15 @@ export default function AnalyticsPage() {
         />
       </div>
 
-      {/* Queue + Worker KPIs */}
+      {/* Queue KPIs — use backend field names directly */}
       {queue && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-          <KpiCard label="Queue Depth" value={queue.queueLength} accent="violet" />
-          <KpiCard label="DLQ Length" value={queue.dlqLength} accent="coral" />
-          <KpiCard label="Throughput" value={`${queue.processingRate}/min`} accent="teal" />
-          <KpiCard label="Avg Processing" value={`${queue.avgProcessingMs}ms`} accent="yellow" />
+          <KpiCard label="Queue right now" value={queue.pending} accent="violet" />
+          <KpiCard label="Dead Letter Queue" value={queue.deadLetter}                        accent="coral" />
+          <KpiCard label="Throughput"        value={`${queue.throughputPerMinute}/min`}      accent="teal" />
+          <KpiCard label="Avg Wait"          value={`${queue.avgWaitMs}ms`}                  accent="yellow"
+            sub={`Drain in ~${queue.estimatedDrainMinutes}min`}
+          />
         </div>
       )}
 
@@ -112,11 +121,11 @@ export default function AnalyticsPage() {
                 <AreaChart data={timeline}>
                   <defs>
                     <linearGradient id="sentGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#0E9F84" stopOpacity={0.3} />
+                      <stop offset="5%"  stopColor="#0E9F84" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#0E9F84" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="failedGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#FF6452" stopOpacity={0.3} />
+                      <stop offset="5%"  stopColor="#FF6452" stopOpacity={0.3} />
                       <stop offset="95%" stopColor="#FF6452" stopOpacity={0} />
                     </linearGradient>
                   </defs>
@@ -140,31 +149,9 @@ export default function AnalyticsPage() {
                       fontSize: 12,
                     }}
                   />
-                  <Area
-                    type="monotone"
-                    dataKey="sent"
-                    stroke="#0E9F84"
-                    strokeWidth={2}
-                    fill="url(#sentGrad)"
-                    name="Sent"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="failed"
-                    stroke="#FF6452"
-                    strokeWidth={2}
-                    fill="url(#failedGrad)"
-                    name="Failed"
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="retrying"
-                    stroke="#FFC83D"
-                    strokeWidth={1.5}
-                    fill="none"
-                    name="Retrying"
-                    strokeDasharray="4 2"
-                  />
+                  <Area type="monotone" dataKey="sent"     stroke="#0E9F84" strokeWidth={2}   fill="url(#sentGrad)"   name="Sent" />
+                  <Area type="monotone" dataKey="failed"   stroke="#FF6452" strokeWidth={2}   fill="url(#failedGrad)" name="Failed" />
+                  <Area type="monotone" dataKey="retrying" stroke="#FFC83D" strokeWidth={1.5} fill="none"             name="Retrying" strokeDasharray="4 2" />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
@@ -177,14 +164,14 @@ export default function AnalyticsPage() {
 
         {/* Delivery Funnel */}
         <Section title="Delivery Funnel">
-          {funnel && total > 0 ? (
+          {funnel && funnelTotal > 0 ? (
             <div className="space-y-3">
               {[
-                { label: 'Queued', value: funnel.queued, color: 'bg-violet/70' },
-                { label: 'Processing', value: funnel.processing, color: 'bg-yellow/60' },
-                { label: 'Sent', value: funnel.sent, color: 'bg-teal' },
-                { label: 'Failed', value: funnel.failed, color: 'bg-coral/70' },
-                { label: 'Dead Letter', value: funnel.deadLetter, color: 'bg-coral' },
+                { label: 'Queued',      value: funnel.queued,      color: 'bg-violet/70' },
+                { label: 'Processing',  value: funnel.processing,  color: 'bg-yellow/60' },
+                { label: 'Sent',        value: funnel.sent,        color: 'bg-teal' },
+                { label: 'Failed',      value: funnel.failed,      color: 'bg-coral/70' },
+                { label: 'Dead Letter', value: funnel.deadLetter,  color: 'bg-coral' },
               ].map(row => (
                 <div key={row.label} className="flex items-center gap-3">
                   <div className="w-24 text-xs text-ink/50 text-right shrink-0">{row.label}</div>
@@ -192,9 +179,9 @@ export default function AnalyticsPage() {
                     <div
                       className={`${row.color} h-2 rounded-full transition-all`}
                       style={{
-                        width: total > 0
-                          ? `${Math.max(2, Math.round(row.value / total * 100))}%`
-                          : '0%'
+                        width: funnelTotal > 0
+                          ? `${Math.max(2, Math.round(row.value / funnelTotal * 100))}%`
+                          : '0%',
                       }}
                     />
                   </div>
@@ -205,13 +192,11 @@ export default function AnalyticsPage() {
               ))}
               <div className="pt-2 border-t border-ink/10 flex justify-between text-xs text-ink/40">
                 <span>Total processed</span>
-                <span className="font-medium">{total.toLocaleString()}</span>
+                <span className="font-medium">{funnelTotal.toLocaleString()}</span>
               </div>
             </div>
           ) : (
-            <div className="text-center py-8 text-ink/30 text-sm">
-              No delivery data yet
-            </div>
+            <div className="text-center py-8 text-ink/30 text-sm">No delivery data yet</div>
           )}
         </Section>
       </div>
@@ -219,34 +204,31 @@ export default function AnalyticsPage() {
       <div className="grid lg:grid-cols-2 gap-6 mb-6">
         {/* Campaign Stats */}
         <Section title="Campaigns">
-          {campaigns && campaigns.total > 0 ? (
+          {campaigns && (campaigns.running + campaigns.scheduled + campaigns.drafts + campaigns.completedToday) > 0 ? (
             <>
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="bg-white rounded-lg p-3 border border-ink/10">
-                  <p className="font-display font-bold text-2xl text-teal">{campaigns.completed}</p>
-                  <p className="text-xs text-ink/50">Completed</p>
+                  <p className="font-display font-bold text-2xl text-teal">{campaigns.completedToday}</p>
+                  <p className="text-xs text-ink/50">Completed today</p>
                 </div>
                 <div className="bg-white rounded-lg p-3 border border-ink/10">
                   <p className="font-display font-bold text-2xl text-violet">{campaigns.running}</p>
                   <p className="text-xs text-ink/50">Running</p>
                 </div>
                 <div className="bg-white rounded-lg p-3 border border-ink/10">
-                  <p className="font-display font-bold text-2xl text-ink">
-                    {campaigns.totalRecipients.toLocaleString()}
-                  </p>
-                  <p className="text-xs text-ink/50">Total Recipients</p>
+                  <p className="font-display font-bold text-2xl text-ink">{campaigns.scheduled}</p>
+                  <p className="text-xs text-ink/50">Scheduled</p>
                 </div>
                 <div className="bg-white rounded-lg p-3 border border-ink/10">
-                  <p className="font-display font-bold text-2xl text-teal">
-                    {campaigns.deliveryRate}%
-                  </p>
-                  <p className="text-xs text-ink/50">Delivery Rate</p>
+                  <p className="font-display font-bold text-2xl text-ink/50">{campaigns.drafts}</p>
+                  <p className="text-xs text-ink/50">Drafts</p>
                 </div>
               </div>
 
-              {campaigns.topCampaigns.length > 0 && (
+              {/* Recent campaigns bar chart — uses progressPercent as the bar value */}
+              {campaigns.recent.length > 0 && (
                 <ResponsiveContainer width="100%" height={160}>
-                  <BarChart data={campaigns.topCampaigns.slice(0, 5)}>
+                  <BarChart data={campaigns.recent.slice(0, 5)}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis
                       dataKey="title"
@@ -257,16 +239,15 @@ export default function AnalyticsPage() {
                       tick={{ fontSize: 10, fill: '#9ca3af' }}
                       tickLine={false}
                       axisLine={false}
+                      domain={[0, 100]}
+                      tickFormatter={v => `${v}%`}
                     />
                     <Tooltip
-                      contentStyle={{
-                        fontSize: 12,
-                        borderRadius: 8,
-                        border: '1px solid #e5e7eb',
-                      }}
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                      formatter={(v) => [`${v ?? 0}%`, 'Progress']}
                     />
-                    <Bar dataKey="delivered" name="Delivered" radius={[4, 4, 0, 0]}>
-                      {campaigns.topCampaigns.slice(0, 5).map((_: TopCampaign, i: number) => (
+                    <Bar dataKey="progressPercent" name="Progress" radius={[4, 4, 0, 0]}>
+                      {campaigns.recent.slice(0, 5).map((_: RecentCampaign, i: number) => (
                         <Cell key={i} fill={i % 2 === 0 ? '#0E9F84' : '#6D28D9'} />
                       ))}
                     </Bar>
@@ -275,9 +256,7 @@ export default function AnalyticsPage() {
               )}
             </>
           ) : (
-            <div className="text-center py-8 text-ink/30 text-sm">
-              No campaigns yet
-            </div>
+            <div className="text-center py-8 text-ink/30 text-sm">No campaigns yet</div>
           )}
         </Section>
 
@@ -294,15 +273,20 @@ export default function AnalyticsPage() {
               {failures.slice(0, 5).map((f: FailureDto, i: number) => (
                 <div key={i} className="bg-white border border-ink/10 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-coral">{f.type}</span>
+                    {/* title = notification type (e.g. "PasswordReset") */}
+                    <span className="text-xs font-medium text-coral">{f.title}</span>
                     <span className="text-xs text-ink/40">
-                      {new Date(f.createdAt).toLocaleString()}
+                      {new Date(f.occurredAt).toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-xs text-ink/60 font-mono truncate">{f.errorMessage}</p>
+                  {/* reason = raw provider response */}
+                  <p className="text-xs text-ink/60 font-mono truncate">{f.reason}</p>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-xs text-ink/40">Provider: {f.provider}</span>
                     <span className="text-xs text-ink/40">Retries: {f.retryCount}</span>
+                    {f.suggestedAction && (
+                      <span className="text-xs text-violet truncate">{f.suggestedAction}</span>
+                    )}
                   </div>
                 </div>
               ))}

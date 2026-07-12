@@ -4,28 +4,41 @@ using Microsoft.Extensions.Logging;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Domain.Entities;
 using NotificationHub.Domain.Enums;
+using StackExchange.Redis;
 using System.Text.Json;
 
 namespace NotificationHub.Worker.Workers;
 
 public class CampaignWorker : BackgroundService
 {
-    private readonly IServiceScopeFactory _scopeFactory;
-    private readonly ILogger<CampaignWorker> _logger;
+    // Unique per-instance ID so Analytics counts this worker separately
+    // from NotificationWorker instances via "worker:heartbeat:*" scan.
+    private readonly string _workerId = $"campaign-{Guid.NewGuid():N}";
 
-    public CampaignWorker(IServiceScopeFactory scopeFactory, ILogger<CampaignWorker> logger)
+    private readonly IServiceScopeFactory      _scopeFactory;
+    private readonly IConnectionMultiplexer    _redis;
+    private readonly ILogger<CampaignWorker>   _logger;
+
+    public CampaignWorker(
+        IServiceScopeFactory scopeFactory,
+        IConnectionMultiplexer redis,
+        ILogger<CampaignWorker> logger)
     {
         _scopeFactory = scopeFactory;
-        _logger = logger;
+        _redis        = redis;
+        _logger       = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("CampaignWorker started");
+        _logger.LogInformation("CampaignWorker {WorkerId} started", _workerId);
         await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            // Write heartbeat every loop so Analytics sees this worker as online.
+            await WriteHeartbeatAsync(stoppingToken);
+
             try
             {
                 await ProcessScheduledCampaignsAsync(stoppingToken);
@@ -38,7 +51,47 @@ public class CampaignWorker : BackgroundService
 
             await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
         }
+
+        // Clean up on graceful shutdown so Analytics doesn't count a ghost.
+        await RemoveHeartbeatAsync();
+
+        _logger.LogInformation("CampaignWorker {WorkerId} stopped", _workerId);
     }
+
+    // ─── Heartbeat ───────────────────────────────────────────────────────────
+
+    private async Task WriteHeartbeatAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            var db = _redis.GetDatabase();
+
+            // TTL must be longer than the poll interval (1 min) so the key
+            // doesn't expire mid-loop. 90 seconds gives a safe margin.
+            await db.StringSetAsync(
+                key:    $"worker:heartbeat:{_workerId}",
+                value:  DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
+                expiry: TimeSpan.FromSeconds(90));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to write heartbeat for CampaignWorker {WorkerId}", _workerId);
+        }
+    }
+
+    private async Task RemoveHeartbeatAsync()
+    {
+        try
+        {
+            await _redis.GetDatabase().KeyDeleteAsync($"worker:heartbeat:{_workerId}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to remove heartbeat for CampaignWorker {WorkerId}", _workerId);
+        }
+    }
+
+    // ─── Everything below is identical to your original CampaignWorker ───────
 
     private static string StripHtml(string html)
     {
@@ -65,9 +118,9 @@ public class CampaignWorker : BackgroundService
             {
                 OrganizationId = orgId,
                 RecipientEmail = member.User!.Email,
-                Type = "OrgAlert",
-                Channel = NotificationChannel.Email,
-                Payload = BuildPayload(subject, htmlBody),
+                Type           = "OrgAlert",
+                Channel        = NotificationChannel.Email,
+                Payload        = BuildPayload(subject, htmlBody),
             };
             await notificationRepository.AddAsync(notification, stoppingToken);
             await notificationRepository.SaveChangesAsync(stoppingToken);
@@ -78,33 +131,33 @@ public class CampaignWorker : BackgroundService
     private async Task ProcessScheduledCampaignsAsync(CancellationToken stoppingToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var campaignRepository = scope.ServiceProvider.GetRequiredService<ICampaignRepository>();
-        var memberRepository = scope.ServiceProvider.GetRequiredService<IOrganizationMemberRepository>();
+        var campaignRepository     = scope.ServiceProvider.GetRequiredService<ICampaignRepository>();
+        var memberRepository       = scope.ServiceProvider.GetRequiredService<IOrganizationMemberRepository>();
         var notificationRepository = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
-        var queue = scope.ServiceProvider.GetRequiredService<INotificationQueue>();
-        var clock = scope.ServiceProvider.GetRequiredService<NotificationHub.Shared.Abstractions.IClock>();
+        var queue                  = scope.ServiceProvider.GetRequiredService<INotificationQueue>();
+        var clock                  = scope.ServiceProvider.GetRequiredService<NotificationHub.Shared.Abstractions.IClock>();
 
         var ready = await campaignRepository.GetScheduledReadyAsync(clock.UtcNow, stoppingToken);
 
         foreach (var campaign in ready)
         {
-            campaign.Status = CampaignStatus.Running;
+            campaign.Status    = CampaignStatus.Running;
             campaign.StartedAt = clock.UtcNow;
             _logger.LogInformation("Campaign {Id} — {Title} — scheduled time reached, starting",
                 campaign.Id, campaign.Title);
 
-            var members = await memberRepository.GetByOrgAsync(campaign.OrganizationId, stoppingToken);
-            var creator = members.FirstOrDefault(m => m.UserId == campaign.CreatedByUserId);
-            var creatorName = creator?.User?.FullName ?? "Someone";
-            var creatorEmail = creator?.User?.Email ?? "—";
+            var members     = await memberRepository.GetByOrgAsync(campaign.OrganizationId, stoppingToken);
+            var creator     = members.FirstOrDefault(m => m.UserId == campaign.CreatedByUserId);
+            var creatorName  = creator?.User?.FullName ?? "Someone";
+            var creatorEmail = creator?.User?.Email    ?? "—";
             var scheduledTime = campaign.ScheduledAt?.ToString("dddd, MMMM d yyyy 'at' h:mm tt") ?? "now";
-            var startedTime = campaign.StartedAt?.ToString("h:mm tt, MMM d yyyy") ?? "now";
-            var bodyPreview = StripHtml(campaign.Message);
+            var startedTime   = campaign.StartedAt?.ToString("h:mm tt, MMM d yyyy")              ?? "now";
+            var bodyPreview   = StripHtml(campaign.Message);
 
             await QueueOrgNotificationsAsync(
                 memberRepository, notificationRepository, queue,
                 campaign.OrganizationId,
-                subject: $"Campaign started: {campaign.Title}",
+                subject:  $"Campaign started: {campaign.Title}",
                 htmlBody: BuildScheduledStartedEmail(
                     campaign.Title, campaign.Subject, scheduledTime,
                     startedTime, campaign.TotalRecipients,
@@ -122,8 +175,7 @@ public class CampaignWorker : BackgroundService
             }
             catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException)
             {
-                _logger.LogWarning(
-                    "One or more scheduled campaigns were claimed by another worker.");
+                _logger.LogWarning("One or more scheduled campaigns were claimed by another worker.");
             }
         }
     }
@@ -131,11 +183,11 @@ public class CampaignWorker : BackgroundService
     private async Task ProcessRunningCampaignsAsync(CancellationToken stoppingToken)
     {
         await using var scope = _scopeFactory.CreateAsyncScope();
-        var campaignRepository = scope.ServiceProvider.GetRequiredService<ICampaignRepository>();
+        var campaignRepository     = scope.ServiceProvider.GetRequiredService<ICampaignRepository>();
         var notificationRepository = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
-        var memberRepository = scope.ServiceProvider.GetRequiredService<IOrganizationMemberRepository>();
-        var queue = scope.ServiceProvider.GetRequiredService<INotificationQueue>();
-        var clock = scope.ServiceProvider.GetRequiredService<NotificationHub.Shared.Abstractions.IClock>();
+        var memberRepository       = scope.ServiceProvider.GetRequiredService<IOrganizationMemberRepository>();
+        var queue                  = scope.ServiceProvider.GetRequiredService<INotificationQueue>();
+        var clock                  = scope.ServiceProvider.GetRequiredService<NotificationHub.Shared.Abstractions.IClock>();
 
         var running = await campaignRepository.GetRunningAsync(stoppingToken);
 
@@ -143,20 +195,19 @@ public class CampaignWorker : BackgroundService
         {
             _logger.LogInformation("Processing campaign {Id} — {Title}", campaign.Id, campaign.Title);
 
-            // Send "campaign sending now" email on first worker pick-up only
             if (campaign.StartNotificationSentAt is null)
             {
-                var members = await memberRepository.GetByOrgAsync(campaign.OrganizationId, stoppingToken);
-                var creator = members.FirstOrDefault(m => m.UserId == campaign.CreatedByUserId);
-                var creatorName = creator?.User?.FullName ?? "Someone";
-                var creatorEmail = creator?.User?.Email ?? "—";
-                var startedTime = campaign.StartedAt?.ToString("h:mm tt, MMM d yyyy") ?? "now";
-                var bodyPreview = StripHtml(campaign.Message);
+                var members      = await memberRepository.GetByOrgAsync(campaign.OrganizationId, stoppingToken);
+                var creator      = members.FirstOrDefault(m => m.UserId == campaign.CreatedByUserId);
+                var creatorName  = creator?.User?.FullName ?? "Someone";
+                var creatorEmail = creator?.User?.Email    ?? "—";
+                var startedTime  = campaign.StartedAt?.ToString("h:mm tt, MMM d yyyy") ?? "now";
+                var bodyPreview  = StripHtml(campaign.Message);
 
                 await QueueOrgNotificationsAsync(
                     memberRepository, notificationRepository, queue,
                     campaign.OrganizationId,
-                    subject: $"Campaign sending now: {campaign.Title}",
+                    subject:  $"Campaign sending now: {campaign.Title}",
                     htmlBody: BuildSendingNowEmail(
                         campaign.Title, campaign.Subject,
                         creatorName, creatorEmail,
@@ -175,7 +226,6 @@ public class CampaignWorker : BackgroundService
                     _logger.LogWarning(
                         "Campaign {CampaignId} was modified by another worker while marking StartNotificationSentAt.",
                         campaign.Id);
-
                     continue;
                 }
             }
@@ -185,15 +235,16 @@ public class CampaignWorker : BackgroundService
 
             if (batch.Count == 0)
             {
-                campaign.Status = CampaignStatus.Completed;
+                campaign.Status      = CampaignStatus.Completed;
                 campaign.CompletedAt = clock.UtcNow;
 
-                var secs = campaign.StartedAt.HasValue
+                var secs         = campaign.StartedAt.HasValue
                     ? (int)(campaign.CompletedAt.Value - campaign.StartedAt.Value).TotalSeconds
                     : 0;
                 var durationText = secs < 60 ? $"{secs}s" : $"{secs / 60}m {secs % 60}s";
 
                 _logger.LogInformation("Campaign {Id} completed in {Duration}", campaign.Id, durationText);
+
                 try
                 {
                     await campaignRepository.SaveChangesAsync(stoppingToken);
@@ -203,30 +254,29 @@ public class CampaignWorker : BackgroundService
                     _logger.LogWarning(
                         "Campaign {CampaignId} was modified while processing recipients.",
                         campaign.Id);
-
                     continue;
                 }
 
-                var allMembers = await memberRepository.GetByOrgAsync(campaign.OrganizationId, stoppingToken);
+                var allMembers       = await memberRepository.GetByOrgAsync(campaign.OrganizationId, stoppingToken);
                 var completionCreator = allMembers.FirstOrDefault(m => m.UserId == campaign.CreatedByUserId);
-                var completedTime = campaign.CompletedAt?.ToString("h:mm tt, MMM d yyyy") ?? "now";
-                var startedTime = campaign.StartedAt?.ToString("h:mm tt, MMM d yyyy") ?? "—";
+                var completedTime    = campaign.CompletedAt?.ToString("h:mm tt, MMM d yyyy") ?? "now";
+                var startedTime      = campaign.StartedAt?.ToString("h:mm tt, MMM d yyyy")   ?? "—";
 
                 await QueueOrgNotificationsAsync(
                     memberRepository, notificationRepository, queue,
                     campaign.OrganizationId,
-                    subject: $"Campaign completed: {campaign.Title}",
+                    subject:  $"Campaign completed: {campaign.Title}",
                     htmlBody: BuildCompletedEmail(
                         campaign.Title, campaign.Subject, startedTime,
                         completedTime, durationText, campaign.TotalRecipients,
                         completionCreator?.User?.FullName ?? "Someone",
-                        completionCreator?.User?.Email ?? "—"),
+                        completionCreator?.User?.Email    ?? "—"),
                     stoppingToken);
 
                 continue;
             }
 
-            // Batch save — one SaveChanges for all notifications, not one per recipient
+            // Batch save — one SaveChanges for all notifications
             var notifications = new List<Notification>();
             foreach (var recipient in batch)
             {
@@ -234,23 +284,21 @@ public class CampaignWorker : BackgroundService
                 {
                     OrganizationId = campaign.OrganizationId,
                     RecipientEmail = recipient.RecipientEmail,
-                    CampaignId = campaign.Id,
-                    Type = $"Campaign_{campaign.Title}",
-                    Channel = campaign.Channel,
-                    Payload = JsonSerializer.Serialize(new
+                    CampaignId     = campaign.Id,            // ← now a real FK on Notification
+                    Type           = $"Campaign_{campaign.Title}",
+                    Channel        = campaign.Channel,
+                    Payload        = JsonSerializer.Serialize(new
                     {
                         subject = campaign.Subject,
-                        body = campaign.Message,
+                        body    = campaign.Message,
                     }),
                 };
                 notifications.Add(notification);
                 await notificationRepository.AddAsync(notification, stoppingToken);
             }
 
-            // Single save for the whole batch
             await notificationRepository.SaveChangesAsync(stoppingToken);
 
-            // Enqueue all and link recipients
             for (int i = 0; i < batch.Count; i++)
             {
                 batch[i].NotificationId = notifications[i].Id;
@@ -262,6 +310,8 @@ public class CampaignWorker : BackgroundService
             await campaignRepository.SaveChangesAsync(stoppingToken);
         }
     }
+
+    // ─── Email templates — untouched from your original ─────────────────────
 
     private static string BuildScheduledStartedEmail(
         string title, string subject, string scheduledTime,

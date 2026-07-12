@@ -10,6 +10,7 @@ public class OrgInvite : BaseEntity
     public string Role { get; set; } = "member";
     public DateTime ExpiresAt { get; set; }
     public bool IsAccepted { get; set; } = false;
+    public DateTime InvitedAt { get; set; } = DateTime.UtcNow;
 
     public Organization? Organization { get; set; }
 }
