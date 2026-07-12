@@ -1,13 +1,11 @@
 using Asp.Versioning;
 using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Application.Features.Notifications.Commands.CreateNotification;
 using NotificationHub.Application.Features.Notifications.Queries.GetNotificationById;
 using NotificationHub.Application.Features.Notifications.Queries.GetNotifications;
-using NotificationHub.Domain.Enums;
-using NotificationHub.Infrastructure.Persistence;
 using NotificationHub.Shared.Abstractions;
 
 namespace NotificationHub.Api.Controllers;
@@ -15,26 +13,21 @@ namespace NotificationHub.Api.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/notifications")]
+[Authorize]
 public class NotificationsController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly ICurrentOrganization _currentOrg;
-    private readonly INotificationRepository _notificationRepository;
-    private readonly INotificationQueue _queue;
-    private readonly AppDbContext _context;
+    private readonly INotificationService _notificationService;
 
     public NotificationsController(
         IMediator mediator,
         ICurrentOrganization currentOrg,
-        INotificationRepository notificationRepository,
-        INotificationQueue queue,
-        AppDbContext context)
+        INotificationService notificationService)
     {
         _mediator = mediator;
         _currentOrg = currentOrg;
-        _notificationRepository = notificationRepository;
-        _queue = queue;
-        _context = context;
+        _notificationService = notificationService;
     }
 
     [HttpPost]
@@ -44,7 +37,7 @@ public class NotificationsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
-            return Unauthorized(new { error = "No organization context. Use JWT or X-Api-Key." });
+            return Unauthorized(new { error = "No organization context." });
 
         var command = new CreateNotificationCommand(
             _currentOrg.OrganizationId.Value,
@@ -52,8 +45,7 @@ public class NotificationsController : ControllerBase
             request.Type,
             request.Channel,
             request.Payload,
-            idempotencyKey
-        );
+            idempotencyKey);
 
         var result = await _mediator.Send(command, cancellationToken);
 
@@ -82,7 +74,7 @@ public class NotificationsController : ControllerBase
             items = result.Value!.Items,
             totalCount = result.Value.TotalCount,
             pageNumber = result.Value.PageNumber,
-            pageSize = result.Value.PageSize
+            pageSize = result.Value.PageSize,
         });
     }
 
@@ -94,15 +86,13 @@ public class NotificationsController : ControllerBase
         if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
-        var query = new GetNotificationByIdQuery(
-            _currentOrg.OrganizationId.Value, publicId);
+        var detail = await _notificationService.GetDetailAsync(
+            _currentOrg.OrganizationId.Value, publicId, cancellationToken);
 
-        var result = await _mediator.Send(query, cancellationToken);
+        if (detail is null)
+            return NotFound(new { error = "Notification not found." });
 
-        if (!result.IsSuccess)
-            return NotFound(new { error = result.Error });
-
-        return Ok(result.Value);
+        return Ok(detail);
     }
 
     [HttpGet("{publicId:guid}/logs")]
@@ -113,23 +103,8 @@ public class NotificationsController : ControllerBase
         if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
-        var notification = await _notificationRepository.GetByPublicIdAsync(
+        var logs = await _notificationService.GetLogsAsync(
             _currentOrg.OrganizationId.Value, publicId, cancellationToken);
-
-        if (notification is null)
-            return NotFound(new { error = "Notification not found." });
-
-        var logs = await _context.NotificationLogs
-            .Where(l => l.NotificationId == notification.Id)
-            .OrderBy(l => l.CreatedAt)
-            .Select(l => new
-            {
-                l.Id,
-                l.Provider,
-                l.Response,
-                l.CreatedAt
-            })
-            .ToListAsync(cancellationToken);
 
         return Ok(logs);
     }
@@ -142,22 +117,13 @@ public class NotificationsController : ControllerBase
         if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
-        var notification = await _notificationRepository.GetByPublicIdAsync(
+        var success = await _notificationService.RetryAsync(
             _currentOrg.OrganizationId.Value, publicId, cancellationToken);
 
-        if (notification is null)
-            return NotFound(new { error = "Notification not found." });
+        if (!success)
+            return BadRequest(new { error = "Notification cannot be retried in its current state." });
 
-        if (notification.Status != NotificationStatus.DeadLetter &&
-            notification.Status != NotificationStatus.Failed)
-            return BadRequest(new { error = "Only Failed or DeadLetter notifications can be retried." });
-
-        notification.Status = NotificationStatus.Pending;
-        notification.RetryCount = 0;
-        await _notificationRepository.SaveChangesAsync(cancellationToken);
-        await _queue.EnqueueAsync(notification.Id, cancellationToken);
-
-        return Ok(new { queued = true, publicId });
+        return Ok(new { retried = true });
     }
 }
 

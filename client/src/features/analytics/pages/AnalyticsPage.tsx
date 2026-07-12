@@ -103,7 +103,7 @@ export default function AnalyticsPage() {
       {/* Queue KPIs — use backend field names directly */}
       {queue && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-          <KpiCard label="Queue right now" value={queue.pending} accent="violet" />
+          <KpiCard label="Queue Depth"       value={queue.pending}                           accent="violet" />
           <KpiCard label="Dead Letter Queue" value={queue.deadLetter}                        accent="coral" />
           <KpiCard label="Throughput"        value={`${queue.throughputPerMinute}/min`}      accent="teal" />
           <KpiCard label="Avg Wait"          value={`${queue.avgWaitMs}ms`}                  accent="yellow"
