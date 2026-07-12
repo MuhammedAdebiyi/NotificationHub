@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { analyticsApi } from '../api/analyticsApi'
 import type {
   OverviewStats,
-  TimelineStats,
+  TimelinePoint,
   DeliveryFunnel,
   QueueSnapshot,
   CampaignAnalytics,
@@ -11,7 +11,7 @@ import type {
 
 export function useAnalytics() {
   const [overview, setOverview] = useState<OverviewStats | null>(null)
-  const [timeline, setTimeline] = useState<TimelineStats | null>(null)
+  const [timeline, setTimeline] = useState<TimelinePoint[]>([])
   const [funnel, setFunnel] = useState<DeliveryFunnel | null>(null)
   const [queue, setQueue] = useState<QueueSnapshot | null>(null)
   const [campaigns, setCampaigns] = useState<CampaignAnalytics | null>(null)

@@ -1,33 +1,34 @@
 export interface OverviewStats {
-  totalSent: number
-  totalFailed: number
-  totalPending: number
+  notificationsSent: number
+  notificationsSentDelta: number
   successRate: number
-  thisMonth: number
-  lastMonth: number
-  monthGrowth: number
-  activeUsers: number
+  successRateDelta: number
+  queueDepth: number
+  workersActive: number
+  avgSendTimeMs: number
+  p95SendTimeMs: number
+  deadLetters: number
+  campaignsRunning: number
+  campaignsScheduled: number
+  plan: string
+  planUsagePct: number
 }
 
 export interface TimelinePoint {
-  date: string
+  hour: string
   sent: number
   failed: number
-  pending: number
-  total: number
-}
-
-export interface TimelineStats {
-  points: TimelinePoint[]
+  retrying: number
+  queued: number
+  processing: number
 }
 
 export interface DeliveryFunnel {
-  created: number
   queued: number
   processing: number
   sent: number
   failed: number
-  deadLettered: number
+  deadLetter: number
 }
 
 export interface QueueSnapshot {
@@ -67,24 +68,4 @@ export interface FailureDto {
   createdAt: string
   provider: string
   errorMessage: string
-}
-
-export interface ProviderStats {
-  providers: ProviderBreakdown[]
-}
-
-export interface ProviderBreakdown {
-  provider: string
-  sent: number
-  failed: number
-  successRate: number
-  avgLatencyMs: number
-}
-
-export interface UsageStats {
-  currentMonth: number
-  lastMonth: number
-  dailyAverage: number
-  peakDay: string
-  peakCount: number
 }

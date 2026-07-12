@@ -1,12 +1,16 @@
 import AppLayout from '@/app/layouts/AppLayout'
 import { useAnalytics } from '../hooks/useAnalytics'
+import type { TopCampaign, FailureDto } from '../types/analytics.types'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, BarChart, Bar, Cell
 } from 'recharts'
 
-function StatCard({
-  label, value, sub, accent = 'violet'
+function KpiCard({
+  label,
+  value,
+  sub,
+  accent = 'violet',
 }: {
   label: string
   value: string | number
@@ -50,6 +54,10 @@ export default function AnalyticsPage() {
     )
   }
 
+  const total = funnel
+    ? funnel.queued + funnel.processing + funnel.sent + funnel.failed + funnel.deadLetter
+    : 0
+
   return (
     <AppLayout>
       <div className="mb-8">
@@ -59,54 +67,49 @@ export default function AnalyticsPage() {
 
       {/* Overview KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <StatCard
+        <KpiCard
           label="Total Sent"
-          value={overview?.totalSent.toLocaleString() ?? '—'}
+          value={overview?.notificationsSent.toLocaleString() ?? '—'}
           accent="teal"
         />
-        <StatCard
+        <KpiCard
           label="Success Rate"
           value={overview ? `${overview.successRate}%` : '—'}
+          sub={overview?.successRateDelta !== 0
+            ? `${overview!.successRateDelta > 0 ? '+' : ''}${overview!.successRateDelta}% vs yesterday`
+            : undefined}
           accent="violet"
         />
-        <StatCard
-          label="Failed"
-          value={overview?.totalFailed.toLocaleString() ?? '—'}
+        <KpiCard
+          label="Dead Letters"
+          value={overview?.deadLetters.toLocaleString() ?? '—'}
           accent="coral"
         />
-        <StatCard
-          label="This Month"
-          value={overview?.thisMonth.toLocaleString() ?? '—'}
-          sub={overview ? `${overview.monthGrowth > 0 ? '+' : ''}${overview.monthGrowth}% vs last month` : undefined}
+        <KpiCard
+          label="Avg Send Time"
+          value={overview ? `${overview.avgSendTimeMs}ms` : '—'}
+          sub={overview ? `p95: ${overview.p95SendTimeMs}ms` : undefined}
           accent="yellow"
         />
       </div>
 
-      {/* Queue Snapshot */}
+      {/* Queue + Worker KPIs */}
       {queue && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-          <StatCard label="Queue Length" value={queue.queueLength} accent="violet" />
-          <StatCard label="DLQ Length" value={queue.dlqLength} accent="coral" />
-          <StatCard
-            label="Processing Rate"
-            value={`${queue.processingRate}/min`}
-            accent="teal"
-          />
-          <StatCard
-            label="Avg Processing"
-            value={`${queue.avgProcessingMs}ms`}
-            accent="yellow"
-          />
+          <KpiCard label="Queue Depth" value={queue.queueLength} accent="violet" />
+          <KpiCard label="DLQ Length" value={queue.dlqLength} accent="coral" />
+          <KpiCard label="Throughput" value={`${queue.processingRate}/min`} accent="teal" />
+          <KpiCard label="Avg Processing" value={`${queue.avgProcessingMs}ms`} accent="yellow" />
         </div>
       )}
 
       <div className="grid lg:grid-cols-3 gap-6 mb-6">
         {/* Volume Timeline */}
         <div className="lg:col-span-2">
-          <Section title="Notification Volume — Last 30 Days">
-            {timeline?.points && timeline.points.length > 0 ? (
+          <Section title="Notification Volume — Last 24h">
+            {timeline.length > 0 && timeline.some(p => p.sent > 0 || p.failed > 0) ? (
               <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={timeline.points}>
+                <AreaChart data={timeline}>
                   <defs>
                     <linearGradient id="sentGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="#0E9F84" stopOpacity={0.3} />
@@ -119,11 +122,16 @@ export default function AnalyticsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis
-                    dataKey="date"
+                    dataKey="hour"
                     tick={{ fontSize: 11, fill: '#9ca3af' }}
                     tickLine={false}
+                    interval={3}
                   />
-                  <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: '#9ca3af' }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
                   <Tooltip
                     contentStyle={{
                       background: '#fff',
@@ -148,11 +156,20 @@ export default function AnalyticsPage() {
                     fill="url(#failedGrad)"
                     name="Failed"
                   />
+                  <Area
+                    type="monotone"
+                    dataKey="retrying"
+                    stroke="#FFC83D"
+                    strokeWidth={1.5}
+                    fill="none"
+                    name="Retrying"
+                    strokeDasharray="4 2"
+                  />
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-48 flex items-center justify-center text-ink/30 text-sm border border-dashed border-ink/15 rounded-lg">
-                No data yet
+                No notification activity in the last 24 hours
               </div>
             )}
           </Section>
@@ -160,15 +177,14 @@ export default function AnalyticsPage() {
 
         {/* Delivery Funnel */}
         <Section title="Delivery Funnel">
-          {funnel ? (
+          {funnel && total > 0 ? (
             <div className="space-y-3">
               {[
-                { label: 'Created', value: funnel.created, color: 'bg-violet' },
                 { label: 'Queued', value: funnel.queued, color: 'bg-violet/70' },
                 { label: 'Processing', value: funnel.processing, color: 'bg-yellow/60' },
                 { label: 'Sent', value: funnel.sent, color: 'bg-teal' },
                 { label: 'Failed', value: funnel.failed, color: 'bg-coral/70' },
-                { label: 'Dead Letter', value: funnel.deadLettered, color: 'bg-coral' },
+                { label: 'Dead Letter', value: funnel.deadLetter, color: 'bg-coral' },
               ].map(row => (
                 <div key={row.label} className="flex items-center gap-3">
                   <div className="w-24 text-xs text-ink/50 text-right shrink-0">{row.label}</div>
@@ -176,18 +192,26 @@ export default function AnalyticsPage() {
                     <div
                       className={`${row.color} h-2 rounded-full transition-all`}
                       style={{
-                        width: funnel.created > 0
-                          ? `${Math.round(row.value / funnel.created * 100)}%`
+                        width: total > 0
+                          ? `${Math.max(2, Math.round(row.value / total * 100))}%`
                           : '0%'
                       }}
                     />
                   </div>
-                  <div className="w-10 text-xs text-ink/60 font-medium">{row.value}</div>
+                  <div className="w-10 text-xs text-ink/60 font-medium text-right">
+                    {row.value}
+                  </div>
                 </div>
               ))}
+              <div className="pt-2 border-t border-ink/10 flex justify-between text-xs text-ink/40">
+                <span>Total processed</span>
+                <span className="font-medium">{total.toLocaleString()}</span>
+              </div>
             </div>
           ) : (
-            <p className="text-sm text-ink/40">No data yet</p>
+            <div className="text-center py-8 text-ink/30 text-sm">
+              No delivery data yet
+            </div>
           )}
         </Section>
       </div>
@@ -195,7 +219,7 @@ export default function AnalyticsPage() {
       <div className="grid lg:grid-cols-2 gap-6 mb-6">
         {/* Campaign Stats */}
         <Section title="Campaigns">
-          {campaigns ? (
+          {campaigns && campaigns.total > 0 ? (
             <>
               <div className="grid grid-cols-2 gap-3 mb-4">
                 <div className="bg-white rounded-lg p-3 border border-ink/10">
@@ -207,14 +231,19 @@ export default function AnalyticsPage() {
                   <p className="text-xs text-ink/50">Running</p>
                 </div>
                 <div className="bg-white rounded-lg p-3 border border-ink/10">
-                  <p className="font-display font-bold text-2xl text-ink">{campaigns.totalRecipients.toLocaleString()}</p>
+                  <p className="font-display font-bold text-2xl text-ink">
+                    {campaigns.totalRecipients.toLocaleString()}
+                  </p>
                   <p className="text-xs text-ink/50">Total Recipients</p>
                 </div>
                 <div className="bg-white rounded-lg p-3 border border-ink/10">
-                  <p className="font-display font-bold text-2xl text-teal">{campaigns.deliveryRate}%</p>
+                  <p className="font-display font-bold text-2xl text-teal">
+                    {campaigns.deliveryRate}%
+                  </p>
                   <p className="text-xs text-ink/50">Delivery Rate</p>
                 </div>
               </div>
+
               {campaigns.topCampaigns.length > 0 && (
                 <ResponsiveContainer width="100%" height={160}>
                   <BarChart data={campaigns.topCampaigns.slice(0, 5)}>
@@ -224,12 +253,20 @@ export default function AnalyticsPage() {
                       tick={{ fontSize: 10, fill: '#9ca3af' }}
                       tickLine={false}
                     />
-                    <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                    <YAxis
+                      tick={{ fontSize: 10, fill: '#9ca3af' }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
                     <Tooltip
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                      contentStyle={{
+                        fontSize: 12,
+                        borderRadius: 8,
+                        border: '1px solid #e5e7eb',
+                      }}
                     />
                     <Bar dataKey="delivered" name="Delivered" radius={[4, 4, 0, 0]}>
-                      {campaigns.topCampaigns.slice(0, 5).map((_, i) => (
+                      {campaigns.topCampaigns.slice(0, 5).map((_: TopCampaign, i: number) => (
                         <Cell key={i} fill={i % 2 === 0 ? '#0E9F84' : '#6D28D9'} />
                       ))}
                     </Bar>
@@ -238,7 +275,9 @@ export default function AnalyticsPage() {
               )}
             </>
           ) : (
-            <p className="text-sm text-ink/40">No campaign data yet</p>
+            <div className="text-center py-8 text-ink/30 text-sm">
+              No campaigns yet
+            </div>
           )}
         </Section>
 
@@ -246,12 +285,13 @@ export default function AnalyticsPage() {
         <Section title="Recent Failures">
           {failures.length === 0 ? (
             <div className="text-center py-8">
-              <p className="text-2xl mb-2">✓</p>
-              <p className="text-sm text-ink/40">No failures — nice work</p>
+              <p className="text-3xl mb-3">✓</p>
+              <p className="text-sm font-medium text-ink/60">No failures</p>
+              <p className="text-xs text-ink/40 mt-1">All notifications delivered successfully</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {failures.slice(0, 5).map((f, i) => (
+              {failures.slice(0, 5).map((f: FailureDto, i: number) => (
                 <div key={i} className="bg-white border border-ink/10 rounded-lg p-3">
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-medium text-coral">{f.type}</span>
@@ -259,7 +299,7 @@ export default function AnalyticsPage() {
                       {new Date(f.createdAt).toLocaleString()}
                     </span>
                   </div>
-                  <p className="text-xs text-ink/60 font-mono">{f.errorMessage}</p>
+                  <p className="text-xs text-ink/60 font-mono truncate">{f.errorMessage}</p>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-xs text-ink/40">Provider: {f.provider}</span>
                     <span className="text-xs text-ink/40">Retries: {f.retryCount}</span>

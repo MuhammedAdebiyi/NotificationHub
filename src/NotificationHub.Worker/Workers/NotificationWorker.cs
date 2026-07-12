@@ -3,29 +3,23 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Domain.Enums;
+using StackExchange.Redis;
 
 namespace NotificationHub.Worker.Workers;
 
 public class NotificationWorker : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IConnectionMultiplexer _redis;
     private readonly ILogger<NotificationWorker> _logger;
-    private readonly SemaphoreSlim _semaphore = new(50);
 
-    private static readonly TimeSpan[] RetryDelays =
-    [
-        TimeSpan.FromSeconds(1),
-        TimeSpan.FromSeconds(5),
-        TimeSpan.FromSeconds(15),
-        TimeSpan.FromSeconds(30),
-        TimeSpan.FromMinutes(1)
-    ];
-
-    private const int MaxRetries = 5;
-
-    public NotificationWorker(IServiceScopeFactory scopeFactory, ILogger<NotificationWorker> logger)
+    public NotificationWorker(
+        IServiceScopeFactory scopeFactory,
+        IConnectionMultiplexer redis,
+        ILogger<NotificationWorker> logger)
     {
         _scopeFactory = scopeFactory;
+        _redis = redis;
         _logger = logger;
     }
 
@@ -35,39 +29,11 @@ public class NotificationWorker : BackgroundService
 
         while (!stoppingToken.IsCancellationRequested)
         {
+            await WriteHeartbeatAsync(stoppingToken);
+
             try
             {
-                var notificationId = await PeekQueueAsync(stoppingToken);
-
-                if (notificationId is null)
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
-                    continue;
-                }
-
-                _logger.LogInformation(">>> Dequeued {Id} — acquiring semaphore", notificationId);
-                await _semaphore.WaitAsync(stoppingToken);
-                _logger.LogInformation(">>> Semaphore acquired — firing task for {Id}", notificationId);
-
-                var idToProcess = notificationId.Value;
-
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        _logger.LogInformation(">>> Task.Run started for {Id}", idToProcess);
-                        await ProcessNotificationAsync(idToProcess, CancellationToken.None);
-                        _logger.LogInformation(">>> Task.Run completed for {Id}", idToProcess);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, ">>> Task.Run EXCEPTION for {Id}", idToProcess);
-                    }
-                    finally
-                    {
-                        _semaphore.Release();
-                    }
-                });
+                await ProcessNextAsync(stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -75,87 +41,108 @@ public class NotificationWorker : BackgroundService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unexpected error in worker loop");
+                _logger.LogError(ex, "Unhandled error in NotificationWorker loop");
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
         }
+
+        _logger.LogInformation("NotificationWorker stopped");
     }
 
-    private async Task<Guid?> PeekQueueAsync(CancellationToken stoppingToken)
+    private async Task WriteHeartbeatAsync(CancellationToken stoppingToken)
     {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var queue = scope.ServiceProvider.GetRequiredService<INotificationQueue>();
-        return await queue.DequeueAsync(stoppingToken);
-    }
-
-    private async Task ProcessNotificationAsync(Guid notificationId, CancellationToken cancellationToken)
-    {
-        await using var scope = _scopeFactory.CreateAsyncScope();
-        var repository = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
-        var provider = scope.ServiceProvider.GetRequiredService<INotificationProvider>();
-        var queue = scope.ServiceProvider.GetRequiredService<INotificationQueue>();
-
-        var notification = await repository.GetByIdAsync(notificationId, cancellationToken);
-
-        if (notification is null)
-        {
-            _logger.LogWarning("Notification {Id} not found in DB — skipping", notificationId);
-            return;
-        }
-
-        _logger.LogInformation("Processing notification {PublicId} (attempt {Attempt})",
-            notification.PublicId, notification.RetryCount + 1);
-
-        notification.Status = NotificationStatus.Processing;
-        await repository.SaveChangesAsync(cancellationToken);
-
         try
         {
-            var success = await provider.SendAsync(notification, cancellationToken);
-
-            if (success)
-            {
-                notification.Status = NotificationStatus.Sent;
-                _logger.LogInformation("Notification {PublicId} sent successfully", notification.PublicId);
-            }
-            else
-            {
-                await HandleFailureAsync(notification, queue, repository, cancellationToken);
-            }
+            var db = _redis.GetDatabase();
+            await db.StringSetAsync(
+                "worker:online:count",
+                "1",
+                TimeSpan.FromSeconds(60));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Provider threw for notification {PublicId}", notification.PublicId);
-            await HandleFailureAsync(notification, queue, repository, cancellationToken);
+            _logger.LogWarning(ex, "Failed to write worker heartbeat to Redis");
+        }
+    }
+
+    private async Task ProcessNextAsync(CancellationToken stoppingToken)
+    {
+        var db = _redis.GetDatabase();
+        var value = await db.ListRightPopAsync("notification_queue");
+
+        if (value.IsNullOrEmpty)
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+            return;
         }
 
-        await repository.SaveChangesAsync(cancellationToken);
+        if (!Guid.TryParse((string?)value, out var notificationId))
+        {
+            _logger.LogWarning("Invalid notification ID in queue: {Value}", (string?)value);
+            return;
+        }
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var repository = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
+        var provider = scope.ServiceProvider.GetRequiredService<INotificationProvider>();
+
+        var notification = await repository.GetByIdAsync(notificationId, stoppingToken);
+        if (notification is null)
+        {
+            _logger.LogWarning("Notification {Id} not found in DB", notificationId);
+            return;
+        }
+
+        _logger.LogInformation("Processing notification {Id} (attempt {Attempt})",
+            notification.Id, notification.RetryCount + 1);
+
+        notification.Status = NotificationStatus.Processing;
+        await repository.SaveChangesAsync(stoppingToken);
+
+        var success = await provider.SendAsync(notification, stoppingToken);
+
+        if (success)
+        {
+            notification.Status = NotificationStatus.Sent;
+            await repository.SaveChangesAsync(stoppingToken);
+            _logger.LogInformation("Notification {Id} sent successfully", notification.Id);
+        }
+        else
+        {
+            await HandleFailureAsync(notification, repository, db, stoppingToken);
+        }
     }
 
     private async Task HandleFailureAsync(
         NotificationHub.Domain.Entities.Notification notification,
-        INotificationQueue queue,
         INotificationRepository repository,
-        CancellationToken cancellationToken)
+        IDatabase db,
+        CancellationToken stoppingToken)
     {
         notification.RetryCount++;
 
-        if (notification.RetryCount >= MaxRetries)
+        var delays = new[] { 1, 5, 15, 30, 60 };
+
+        if (notification.RetryCount <= delays.Length)
+        {
+            notification.Status = NotificationStatus.Retrying;
+            await repository.SaveChangesAsync(stoppingToken);
+
+            var delay = delays[notification.RetryCount - 1];
+            _logger.LogWarning("Notification {Id} failed, retrying in {Delay}s (attempt {Attempt})",
+                notification.Id, delay, notification.RetryCount);
+
+            await Task.Delay(TimeSpan.FromSeconds(delay), stoppingToken);
+            await db.ListLeftPushAsync("notification_queue", notification.Id.ToString());
+        }
+        else
         {
             notification.Status = NotificationStatus.DeadLetter;
-            _logger.LogWarning("Notification {PublicId} exceeded max retries — moving to DLQ",
-                notification.PublicId);
-            await queue.EnqueueDeadLetterAsync(notification.Id, cancellationToken);
-            return;
+            await repository.SaveChangesAsync(stoppingToken);
+
+            await db.ListLeftPushAsync("notification_dlq", notification.Id.ToString());
+            _logger.LogError("Notification {Id} moved to DLQ after {Attempts} attempts",
+                notification.Id, notification.RetryCount);
         }
-
-        notification.Status = NotificationStatus.Retrying;
-        var delay = RetryDelays[notification.RetryCount - 1];
-
-        _logger.LogWarning("Notification {PublicId} failed (attempt {Attempt}) — retrying in {Delay}",
-            notification.PublicId, notification.RetryCount, delay);
-
-        await Task.Delay(delay, cancellationToken);
-        await queue.EnqueueAsync(notification.Id, cancellationToken);
     }
 }
