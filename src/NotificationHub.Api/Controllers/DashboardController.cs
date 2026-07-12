@@ -1,126 +1,57 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using NotificationHub.Domain.Enums;
-using NotificationHub.Infrastructure.Persistence;
+using NotificationHub.Application.Abstractions;
 using NotificationHub.Shared.Abstractions;
-using StackExchange.Redis;
 
 namespace NotificationHub.Api.Controllers;
 
+/// <summary>
+/// Homepage-only data. Analytics live in AnalyticsController.
+/// </summary>
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/dashboard")]
 [Authorize]
-public class DashboardController : ControllerBase
+public sealed class DashboardController : ControllerBase
 {
-    private readonly AppDbContext _context;
-    private readonly IConnectionMultiplexer _redis;
+    private readonly IAnalyticsService    _analytics;
     private readonly ICurrentOrganization _currentOrg;
 
-    public DashboardController(
-        AppDbContext context,
-        IConnectionMultiplexer redis,
-        ICurrentOrganization currentOrg)
+    public DashboardController(IAnalyticsService analytics, ICurrentOrganization currentOrg)
     {
-        _context = context;
-        _redis = redis;
+        _analytics  = analytics;
         _currentOrg = currentOrg;
     }
 
+    /// <summary>
+    /// KPI summary cards for the dashboard homepage.
+    /// Delegates to AnalyticsService — no DB or Redis here.
+    /// </summary>
     [HttpGet("stats")]
-    public async Task<IActionResult> GetStats(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetStats(CancellationToken ct)
     {
-        if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
-            return Unauthorized(new { error = "No organization context." });
-
-        var orgId = _currentOrg.OrganizationId.Value;
-
-        var totalSent = await _context.Notifications
-            .CountAsync(n => n.OrganizationId == orgId &&
-                             n.Status == NotificationStatus.Sent, cancellationToken);
-
-        var pending = await _context.Notifications
-            .CountAsync(n => n.OrganizationId == orgId &&
-                             n.Status == NotificationStatus.Pending, cancellationToken);
-
-        var failed = await _context.Notifications
-            .CountAsync(n => n.OrganizationId == orgId &&
-                            (n.Status == NotificationStatus.Failed ||
-                             n.Status == NotificationStatus.DeadLetter), cancellationToken);
-
-        var total = await _context.Notifications
-            .CountAsync(n => n.OrganizationId == orgId, cancellationToken);
-
-        var successRate = total == 0 ? 0.0 : Math.Round((double)totalSent / total * 100, 1);
-
-        var db = _redis.GetDatabase();
-        var queueLength = await db.ListLengthAsync("notification_queue");
-
-        var activeUsers = await _context.OrganizationMembers
-            .CountAsync(m => m.OrganizationId == orgId, cancellationToken);
-
-        return Ok(new
-        {
-            totalSent,
-            pending,
-            failed,
-            successRate,
-            queueLength,
-            activeUsers
-        });
+        if (_currentOrg.OrganizationId is null) return Unauthorized();
+        return Ok(await _analytics.GetOverviewAsync(_currentOrg.OrganizationId.Value, ct));
     }
 
+    /// <summary>
+    /// 7-day notification volume for the homepage chart.
+    /// </summary>
     [HttpGet("volume")]
-    public async Task<IActionResult> GetVolume(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetVolume(CancellationToken ct)
     {
-        if (_currentOrg.OrganizationId is null)
-            return Unauthorized(new { error = "No organization context." });
-
-        var orgId = _currentOrg.OrganizationId.Value;
-        var from = DateTime.UtcNow.AddDays(-6).Date;
-
-        var data = await _context.Notifications
-            .Where(n => n.OrganizationId == orgId && n.CreatedAt >= from)
-            .GroupBy(n => n.CreatedAt.Date)
-            .Select(g => new { date = g.Key, count = g.Count() })
-            .OrderBy(x => x.date)
-            .ToListAsync(cancellationToken);
-
-        
-        var result = Enumerable.Range(0, 7)
-            .Select(i => {
-                var day = from.AddDays(i);
-                var found = data.FirstOrDefault(d => d.date == day);
-                return new { date = day.ToString("MMM dd"), count = found?.count ?? 0 };
-            });
-
-        return Ok(result);
+        if (_currentOrg.OrganizationId is null) return Unauthorized();
+        return Ok(await _analytics.GetTimelineAsync(_currentOrg.OrganizationId.Value, ct));
     }
 
+    /// <summary>
+    /// Recent activity feed for the homepage.
+    /// </summary>
     [HttpGet("activity")]
-    public async Task<IActionResult> GetActivity(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetActivity(CancellationToken ct)
     {
-        if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
-            return Unauthorized(new { error = "No organization context." });
-
-        var orgId = _currentOrg.OrganizationId.Value;
-
-        var activity = await _context.Notifications
-            .Where(n => n.OrganizationId == orgId)
-            .OrderByDescending(n => n.CreatedAt)
-            .Take(10)
-            .Select(n => new
-            {
-                id = n.PublicId,
-                label = n.Type,
-                channel = n.Channel.ToString(),
-                status = n.Status.ToString(),
-                timestamp = n.CreatedAt
-            })
-            .ToListAsync(cancellationToken);
-
-        return Ok(activity);
+        if (_currentOrg.OrganizationId is null) return Unauthorized();
+        return Ok(await _analytics.GetActivityAsync(_currentOrg.OrganizationId.Value, ct));
     }
 }

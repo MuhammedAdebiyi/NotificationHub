@@ -1,161 +1,275 @@
-import { useState, useEffect } from 'react'
 import AppLayout from '@/app/layouts/AppLayout'
-import { apiClient } from '@/shared/services/apiClient'
+import { useAnalytics } from '../hooks/useAnalytics'
+import {
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, BarChart, Bar, Cell
+} from 'recharts'
 
-interface DashboardStats {
-  totalSent: number
-  pending: number
-  failed: number
-  successRate: number
-  queueLength: number
-  activeUsers: number
+function StatCard({
+  label, value, sub, accent = 'violet'
+}: {
+  label: string
+  value: string | number
+  sub?: string
+  accent?: 'violet' | 'teal' | 'coral' | 'yellow'
+}) {
+  const colors = {
+    violet: 'text-violet',
+    teal: 'text-teal',
+    coral: 'text-coral',
+    yellow: 'text-ink',
+  }
+  return (
+    <div className="bg-fog border border-ink/10 rounded-xl p-5">
+      <p className={`font-display font-extrabold text-3xl ${colors[accent]}`}>{value}</p>
+      <p className="text-xs text-ink/50 mt-1">{label}</p>
+      {sub && <p className="text-xs text-ink/40 mt-0.5">{sub}</p>}
+    </div>
+  )
 }
 
-interface ActivityItem {
-  id: string
-  label: string
-  channel: string
-  status: string
-  timestamp: string
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-fog border border-ink/10 rounded-xl p-6">
+      <h2 className="font-display font-bold text-lg mb-4">{title}</h2>
+      {children}
+    </div>
+  )
 }
 
 export default function AnalyticsPage() {
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [activity, setActivity] = useState<ActivityItem[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const { overview, timeline, funnel, queue, campaigns, failures, isLoading } = useAnalytics()
 
-  useEffect(() => {
-    Promise.all([
-      apiClient.get<DashboardStats>('/api/v1/dashboard/stats'),
-      apiClient.get<ActivityItem[]>('/api/v1/dashboard/activity'),
-    ])
-      .then(([s, a]) => { setStats(s); setActivity(a) })
-      .catch(() => {})
-      .finally(() => setIsLoading(false))
-  }, [])
-
-  const statusCounts = activity.reduce<Record<string, number>>((acc, item) => {
-    acc[item.status] = (acc[item.status] ?? 0) + 1
-    return acc
-  }, {})
-
-  const channelCounts = activity.reduce<Record<string, number>>((acc, item) => {
-    acc[item.channel] = (acc[item.channel] ?? 0) + 1
-    return acc
-  }, {})
-
-  const barColor: Record<string, string> = {
-    Sent: 'bg-teal',
-    Pending: 'bg-yellow-400',
-    Failed: 'bg-coral',
-    DeadLetter: 'bg-coral/60',
-    Retrying: 'bg-violet',
-    Processing: 'bg-ink/30',
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-64 text-ink/40 text-sm">
+          Loading analytics...
+        </div>
+      </AppLayout>
+    )
   }
 
   return (
     <AppLayout>
       <div className="mb-8">
-        <p className="hand text-xl text-violet mb-1">delivery insights —</p>
+        <p className="hand text-xl text-violet mb-1">how are we doing —</p>
         <h1 className="font-display font-bold text-3xl">Analytics</h1>
       </div>
 
-      {isLoading ? (
-        <p className="text-sm text-ink/40">Loading...</p>
-      ) : (
-        <div className="space-y-6">
-          {/* Summary row */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {[
-              { label: 'Total Sent', value: stats?.totalSent ?? 0, color: 'text-teal' },
-              { label: 'Pending', value: stats?.pending ?? 0, color: 'text-yellow-500' },
-              { label: 'Failed', value: stats?.failed ?? 0, color: 'text-coral' },
-              { label: 'Success Rate', value: `${stats?.successRate ?? 0}%`, color: 'text-violet' },
-            ].map(card => (
-              <div key={card.label} className="bg-fog border border-ink/10 rounded-xl p-5">
-                <p className={`font-display font-extrabold text-3xl ${card.color}`}>{card.value}</p>
-                <p className="text-xs text-ink/50 mt-1">{card.label}</p>
-              </div>
-            ))}
-          </div>
+      {/* Overview KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <StatCard
+          label="Total Sent"
+          value={overview?.totalSent.toLocaleString() ?? '—'}
+          accent="teal"
+        />
+        <StatCard
+          label="Success Rate"
+          value={overview ? `${overview.successRate}%` : '—'}
+          accent="violet"
+        />
+        <StatCard
+          label="Failed"
+          value={overview?.totalFailed.toLocaleString() ?? '—'}
+          accent="coral"
+        />
+        <StatCard
+          label="This Month"
+          value={overview?.thisMonth.toLocaleString() ?? '—'}
+          sub={overview ? `${overview.monthGrowth > 0 ? '+' : ''}${overview.monthGrowth}% vs last month` : undefined}
+          accent="yellow"
+        />
+      </div>
 
-          {/* Status breakdown */}
-          <div className="bg-fog border border-ink/10 rounded-xl p-6">
-            <h2 className="font-display font-bold text-lg mb-5">Status Breakdown</h2>
-            {Object.keys(statusCounts).length === 0 ? (
-              <p className="text-sm text-ink/40 text-center py-6">No data yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {Object.entries(statusCounts).map(([status, count]) => {
-                  const total = Object.values(statusCounts).reduce((a, b) => a + b, 0)
-                  const pct = Math.round((count / total) * 100)
-                  return (
-                    <div key={status}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="font-medium">{status}</span>
-                        <span className="text-ink/50">{count} ({pct}%)</span>
-                      </div>
-                      <div className="h-2 bg-ink/10 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${barColor[status] ?? 'bg-ink/30'}`}
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Channel breakdown */}
-          <div className="bg-fog border border-ink/10 rounded-xl p-6">
-            <h2 className="font-display font-bold text-lg mb-5">Channel Breakdown</h2>
-            {Object.keys(channelCounts).length === 0 ? (
-              <p className="text-sm text-ink/40 text-center py-6">No data yet.</p>
-            ) : (
-              <div className="flex gap-4 flex-wrap">
-                {Object.entries(channelCounts).map(([channel, count]) => (
-                  <div key={channel} className="bg-white border border-ink/10 rounded-xl px-6 py-4 text-center">
-                    <p className="font-display font-extrabold text-2xl text-violet">{count}</p>
-                    <p className="text-xs text-ink/50 mt-1">{channel}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Recent activity */}
-          <div className="bg-fog border border-ink/10 rounded-xl p-6">
-            <h2 className="font-display font-bold text-lg mb-4">Recent Activity</h2>
-            {activity.length === 0 ? (
-              <p className="text-sm text-ink/40 text-center py-6">No activity yet.</p>
-            ) : (
-              <div className="divide-y divide-ink/5">
-                {activity.map(item => (
-                  <div key={item.id} className="flex items-center justify-between py-3">
-                    <div>
-                      <span className="text-sm font-medium">{item.label}</span>
-                      <span className="text-xs text-ink/40 ml-2">{item.channel}</span>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-ink/30">
-                        {new Date(item.timestamp).toLocaleString()}
-                      </span>
-                      <span className={`text-xs font-medium ${
-                        item.status === 'Sent' ? 'text-teal' :
-                        item.status === 'Failed' ? 'text-coral' : 'text-ink/40'
-                      }`}>
-                        {item.status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+      {/* Queue Snapshot */}
+      {queue && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          <StatCard label="Queue Length" value={queue.queueLength} accent="violet" />
+          <StatCard label="DLQ Length" value={queue.dlqLength} accent="coral" />
+          <StatCard
+            label="Processing Rate"
+            value={`${queue.processingRate}/min`}
+            accent="teal"
+          />
+          <StatCard
+            label="Avg Processing"
+            value={`${queue.avgProcessingMs}ms`}
+            accent="yellow"
+          />
         </div>
       )}
+
+      <div className="grid lg:grid-cols-3 gap-6 mb-6">
+        {/* Volume Timeline */}
+        <div className="lg:col-span-2">
+          <Section title="Notification Volume — Last 30 Days">
+            {timeline?.points && timeline.points.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={timeline.points}>
+                  <defs>
+                    <linearGradient id="sentGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0E9F84" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#0E9F84" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="failedGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#FF6452" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#FF6452" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: '#9ca3af' }}
+                    tickLine={false}
+                  />
+                  <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    contentStyle={{
+                      background: '#fff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="sent"
+                    stroke="#0E9F84"
+                    strokeWidth={2}
+                    fill="url(#sentGrad)"
+                    name="Sent"
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="failed"
+                    stroke="#FF6452"
+                    strokeWidth={2}
+                    fill="url(#failedGrad)"
+                    name="Failed"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-48 flex items-center justify-center text-ink/30 text-sm border border-dashed border-ink/15 rounded-lg">
+                No data yet
+              </div>
+            )}
+          </Section>
+        </div>
+
+        {/* Delivery Funnel */}
+        <Section title="Delivery Funnel">
+          {funnel ? (
+            <div className="space-y-3">
+              {[
+                { label: 'Created', value: funnel.created, color: 'bg-violet' },
+                { label: 'Queued', value: funnel.queued, color: 'bg-violet/70' },
+                { label: 'Processing', value: funnel.processing, color: 'bg-yellow/60' },
+                { label: 'Sent', value: funnel.sent, color: 'bg-teal' },
+                { label: 'Failed', value: funnel.failed, color: 'bg-coral/70' },
+                { label: 'Dead Letter', value: funnel.deadLettered, color: 'bg-coral' },
+              ].map(row => (
+                <div key={row.label} className="flex items-center gap-3">
+                  <div className="w-24 text-xs text-ink/50 text-right shrink-0">{row.label}</div>
+                  <div className="flex-1 bg-ink/5 rounded-full h-2">
+                    <div
+                      className={`${row.color} h-2 rounded-full transition-all`}
+                      style={{
+                        width: funnel.created > 0
+                          ? `${Math.round(row.value / funnel.created * 100)}%`
+                          : '0%'
+                      }}
+                    />
+                  </div>
+                  <div className="w-10 text-xs text-ink/60 font-medium">{row.value}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-ink/40">No data yet</p>
+          )}
+        </Section>
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-6 mb-6">
+        {/* Campaign Stats */}
+        <Section title="Campaigns">
+          {campaigns ? (
+            <>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="bg-white rounded-lg p-3 border border-ink/10">
+                  <p className="font-display font-bold text-2xl text-teal">{campaigns.completed}</p>
+                  <p className="text-xs text-ink/50">Completed</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-ink/10">
+                  <p className="font-display font-bold text-2xl text-violet">{campaigns.running}</p>
+                  <p className="text-xs text-ink/50">Running</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-ink/10">
+                  <p className="font-display font-bold text-2xl text-ink">{campaigns.totalRecipients.toLocaleString()}</p>
+                  <p className="text-xs text-ink/50">Total Recipients</p>
+                </div>
+                <div className="bg-white rounded-lg p-3 border border-ink/10">
+                  <p className="font-display font-bold text-2xl text-teal">{campaigns.deliveryRate}%</p>
+                  <p className="text-xs text-ink/50">Delivery Rate</p>
+                </div>
+              </div>
+              {campaigns.topCampaigns.length > 0 && (
+                <ResponsiveContainer width="100%" height={160}>
+                  <BarChart data={campaigns.topCampaigns.slice(0, 5)}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis
+                      dataKey="title"
+                      tick={{ fontSize: 10, fill: '#9ca3af' }}
+                      tickLine={false}
+                    />
+                    <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                    />
+                    <Bar dataKey="delivered" name="Delivered" radius={[4, 4, 0, 0]}>
+                      {campaigns.topCampaigns.slice(0, 5).map((_, i) => (
+                        <Cell key={i} fill={i % 2 === 0 ? '#0E9F84' : '#6D28D9'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-ink/40">No campaign data yet</p>
+          )}
+        </Section>
+
+        {/* Recent Failures */}
+        <Section title="Recent Failures">
+          {failures.length === 0 ? (
+            <div className="text-center py-8">
+              <p className="text-2xl mb-2">✓</p>
+              <p className="text-sm text-ink/40">No failures — nice work</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {failures.slice(0, 5).map((f, i) => (
+                <div key={i} className="bg-white border border-ink/10 rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-coral">{f.type}</span>
+                    <span className="text-xs text-ink/40">
+                      {new Date(f.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <p className="text-xs text-ink/60 font-mono">{f.errorMessage}</p>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-xs text-ink/40">Provider: {f.provider}</span>
+                    <span className="text-xs text-ink/40">Retries: {f.retryCount}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+      </div>
     </AppLayout>
   )
 }

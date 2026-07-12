@@ -15,7 +15,10 @@ public class NotificationConfiguration : IEntityTypeConfiguration<Notification>
         builder.Property(n => n.Payload).IsRequired();
         builder.Property(n => n.Channel).HasConversion<string>().HasMaxLength(20);
         builder.Property(n => n.Status).HasConversion<string>().HasMaxLength(20);
-
+        builder.HasOne(n => n.Campaign)
+            .WithMany()
+            .HasForeignKey(n => n.CampaignId)
+            .IsRequired(false);
 
         builder.HasIndex(n => n.PublicId).IsUnique();
         builder.HasIndex(n => new { n.OrganizationId, n.Status });

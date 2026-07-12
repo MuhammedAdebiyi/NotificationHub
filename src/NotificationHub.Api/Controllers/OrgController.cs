@@ -65,7 +65,29 @@ public class OrgController : ControllerBase
         _templateRepository = templateRepository;
         _configuration = configuration;
     }
+    [HttpGet("/api/v1/org/info")]
+    [Authorize]
+    public async Task<IActionResult> GetOrgInfo(CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
 
+        var org = await _orgRepository.GetByIdAsync(
+            _currentOrg.OrganizationId.Value, cancellationToken);
+
+        if (org is null)
+            return NotFound(new { error = "Organization not found." });
+
+        return Ok(new
+        {
+            id = org.Id,
+            name = org.Name,
+            slug = org.Slug,
+            plan = org.Plan,
+            fromName = org.FromName,
+            createdAt = org.CreatedAt,
+        });
+    }
     [HttpGet("members")]
     public async Task<IActionResult> GetMembers(CancellationToken cancellationToken)
     {
@@ -90,22 +112,6 @@ public class OrgController : ControllerBase
                 m.User.IsEmailVerified,
             }
         }));
-    }
-
-    [HttpGet("/api/v1/org/info")]
-    [Authorize]
-    public async Task<IActionResult> GetOrgInfo(CancellationToken cancellationToken)
-    {
-        if (_currentOrg.OrganizationId is null)
-            return Unauthorized(new { error = "No organization context." });
-
-        var org = await _orgRepository.GetByIdAsync(
-            _currentOrg.OrganizationId.Value, cancellationToken);
-
-        if (org is null)
-            return NotFound();
-
-        return Ok(new { org.Name, org.Plan, org.Slug });
     }
 
     [HttpGet("members/{id:guid}")]

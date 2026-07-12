@@ -7,6 +7,7 @@ public class Notification : BaseEntity
 {
     public Guid PublicId { get; set; } = Guid.NewGuid();
     public Guid OrganizationId { get; set; }
+    public Guid? CampaignId { get; set; }
     public string RecipientEmail { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
     public NotificationChannel Channel { get; set; }
@@ -15,5 +16,6 @@ public class Notification : BaseEntity
     public int RetryCount { get; set; } = 0;
 
     public Organization? Organization { get; set; }
+    public Campaign? Campaign { get; set; }
     public ICollection<NotificationLog> Logs { get; set; } = new List<NotificationLog>();
 }

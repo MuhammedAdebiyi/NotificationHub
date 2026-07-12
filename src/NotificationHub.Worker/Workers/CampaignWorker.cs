@@ -234,6 +234,7 @@ public class CampaignWorker : BackgroundService
                 {
                     OrganizationId = campaign.OrganizationId,
                     RecipientEmail = recipient.RecipientEmail,
+                    CampaignId = campaign.Id,
                     Type = $"Campaign_{campaign.Title}",
                     Channel = campaign.Channel,
                     Payload = JsonSerializer.Serialize(new

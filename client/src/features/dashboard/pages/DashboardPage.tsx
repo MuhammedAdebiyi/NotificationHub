@@ -30,6 +30,7 @@ export default function DashboardPage() {
   const firstName = user?.fullName?.split(' ')[0] ?? 'there'
 
   // ─── Data fetching ─────────────────────────────────────────────
+  const { data: orgInfo } = usePolling(dashboardApi.getOrgInfo, { intervalMs: 60000 })
   const { data: health }    = usePolling(useCallback(() => dashboardApi.getHealth(), []),         FAST)
   const { data: stats }     = usePolling(useCallback(() => dashboardApi.getTodayStats(), []),     FAST)
   const { data: timeline }  = usePolling(useCallback(() => dashboardApi.getDeliveryTimeline(), []), FAST)
@@ -48,7 +49,7 @@ export default function DashboardPage() {
           <p className="hand text-2xl text-violet mb-1">
             {getGreeting()}, {firstName} —
           </p>
-          <h1 className="font-display font-bold text-3xl">Operations Center</h1>
+          <h1 className="font-display font-bold text-3xl">{orgInfo?.name ?? 'Operations Center'}</h1>
         </div>
 
         <div className="hidden sm:flex items-center gap-3 bg-fog border border-ink/10 rounded-xl px-4 py-3">
