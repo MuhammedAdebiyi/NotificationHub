@@ -20,7 +20,12 @@ public record NotificationDetailDto(
     DateTime CreatedAt,
     string? LastProvider,
     string? LastError,
-    List<NotificationLogDto> Logs
+    List<NotificationLogDto> Logs,
+
+    DateTime? AcceptedAt,
+    DateTime? ProcessedAt,
+    string? WorkerId,
+    string? ProviderMessageId
 );
 
 public record NotificationLogDto(

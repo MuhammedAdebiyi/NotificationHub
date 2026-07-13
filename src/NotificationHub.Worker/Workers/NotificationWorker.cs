@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NotificationHub.Application.Abstractions;
+using NotificationHub.Domain.Entities;
 using NotificationHub.Domain.Enums;
 using StackExchange.Redis;
 
@@ -125,17 +126,24 @@ public class NotificationWorker : BackgroundService
         _logger.LogInformation("Processing notification {Id} (attempt {Attempt})",
             notification.Id, notification.RetryCount + 1);
 
-        notification.Status = NotificationStatus.Processing;
+        notification.AssignWorker(_workerId);
+
         await repository.SaveChangesAsync(stoppingToken);
 
         var success = await provider.SendAsync(notification, stoppingToken);
 
         if (success)
         {
-            notification.Status      = NotificationStatus.Sent;
-            notification.ProcessedAt = DateTime.UtcNow;   // ← kills the AvgSendTimeMs TODO
-            await repository.SaveChangesAsync(stoppingToken);
-            _logger.LogInformation("Notification {Id} sent successfully", notification.Id);
+            notification.MarkDelivered(
+            provider.GetType().Name,
+            string.Empty 
+        );
+
+        await repository.SaveChangesAsync(stoppingToken);
+
+            _logger.LogInformation(
+                "Notification {Id} sent successfully",
+                notification.Id);
         }
         else
         {
@@ -143,39 +151,53 @@ public class NotificationWorker : BackgroundService
         }
     }
 
-    private async Task HandleFailureAsync(
-        NotificationHub.Domain.Entities.Notification notification,
+        private async Task HandleFailureAsync(
+        Notification notification,
         INotificationRepository repository,
         IDatabase db,
         CancellationToken stoppingToken)
     {
-        notification.RetryCount++;
-
         var delays = new[] { 1, 5, 15, 30, 60 };
 
-        if (notification.RetryCount <= delays.Length)
+        var nextAttempt = notification.RetryCount + 1;
+
+        if (nextAttempt <= delays.Length)
         {
-            notification.Status = NotificationStatus.Retrying;
+            var delay = delays[nextAttempt - 1];
+
+            notification.ScheduleRetry(
+                DateTime.UtcNow.AddSeconds(delay),
+                "Provider delivery failed");
+
             await repository.SaveChangesAsync(stoppingToken);
 
-            var delay = delays[notification.RetryCount - 1];
             _logger.LogWarning(
                 "Notification {Id} failed, retrying in {Delay}s (attempt {Attempt})",
-                notification.Id, delay, notification.RetryCount);
+                notification.Id,
+                delay,
+                nextAttempt);
 
             await Task.Delay(TimeSpan.FromSeconds(delay), stoppingToken);
-            await db.ListLeftPushAsync("notification_queue", notification.Id.ToString());
+
+            await db.ListLeftPushAsync(
+                "notification_queue",
+                notification.Id.ToString());
         }
         else
         {
-            notification.Status      = NotificationStatus.DeadLetter;
-            notification.ProcessedAt = DateTime.UtcNow;   // record when it finally gave up
+            notification.MoveToDeadLetter(
+                "Provider delivery failed");
+
             await repository.SaveChangesAsync(stoppingToken);
 
-            await db.ListLeftPushAsync("notification_dlq", notification.Id.ToString());
+            await db.ListLeftPushAsync(
+                "notification_dlq",
+                notification.Id.ToString());
+
             _logger.LogError(
                 "Notification {Id} moved to DLQ after {Attempts} attempts",
-                notification.Id, notification.RetryCount);
+                notification.Id,
+                notification.RetryCount);
         }
     }
-}
+    }

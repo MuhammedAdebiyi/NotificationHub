@@ -48,7 +48,11 @@ public class NotificationService : INotificationService
             notification.CreatedAt,
             lastLog?.Provider,
             lastLog?.Response,
-            logs
+            logs,
+            notification.AcceptedAt,
+            notification.ProcessedAt,
+            notification.WorkerId,
+            notification.ProviderMessageId
         );
     }
 
