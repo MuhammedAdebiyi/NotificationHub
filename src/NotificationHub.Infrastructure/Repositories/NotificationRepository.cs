@@ -39,7 +39,12 @@ public class NotificationRepository : INotificationRepository
         return await _context.Notifications
             .CountAsync(n => n.OrganizationId == organizationId, cancellationToken);
     }
-
+    
+    public async Task<int> CountByUserAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Notifications
+            .CountAsync(n => n.OrganizationId == organizationId && n.CreatedByUserId == userId, cancellationToken);
+    }
     public async Task AddIdempotencyKeyAsync(
         IdempotencyKey idempotencyKey,
         CancellationToken cancellationToken = default)

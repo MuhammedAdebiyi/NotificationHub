@@ -6,6 +6,7 @@ namespace NotificationHub.Application.Features.Notifications.Commands.CreateNoti
 
 public record CreateNotificationCommand(
     Guid OrganizationId,
+    Guid UserId,
     string RecipientEmail,
     string Type,
     NotificationChannel Channel,

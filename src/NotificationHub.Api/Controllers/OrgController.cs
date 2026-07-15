@@ -126,8 +126,8 @@ public class OrgController : ControllerBase
         if (member is null)
             return NotFound(new { error = "Member not found." });
 
-        var notificationCount = await _notificationRepository.CountByOrgAsync(orgId, cancellationToken);
-        var templateCount = await _templateRepository.CountByOrgAsync(orgId, cancellationToken);
+        var notificationCount = await _notificationRepository.CountByUserAsync(orgId, member.UserId, cancellationToken);
+        var templateCount = await _templateRepository.CountByUserAsync(orgId, member.UserId, cancellationToken);
 
         return Ok(new
         {

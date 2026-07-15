@@ -57,6 +57,9 @@ public sealed class AnalyticsService : IAnalyticsService
                           : successRate < 98 || deadLetters > 10 || queueLatencyMs > 2000 ? "warning"
                           : "healthy";
 
+        // FIX: use the IsSuccess flag the worker already sets, instead of string-matching
+        // the word "success" inside the raw provider response text (SendByte's actual
+        // response format, e.g. "accepted: id=...", never contains that word).
         var recentLogs = await _context.NotificationLogs
             .Where(l => _context.Notifications
                 .Where(n => n.OrganizationId == organizationId)
@@ -64,11 +67,11 @@ public sealed class AnalyticsService : IAnalyticsService
                 .Contains(l.NotificationId))
             .OrderByDescending(l => l.CreatedAt)
             .Take(100)
-            .Select(l => l.Response)
+            .Select(l => l.IsSuccess)
             .ToListAsync(ct);
 
         var providerSuccessRate = recentLogs.Count == 0 ? 100.0
-            : Math.Round((double)recentLogs.Count(r => r != null && r.Contains("success", StringComparison.OrdinalIgnoreCase)) / recentLogs.Count * 100, 1);
+            : Math.Round((double)recentLogs.Count(s => s) / recentLogs.Count * 100, 1);
 
         var components = new List<ComponentHealthDto>
         {
@@ -178,7 +181,8 @@ public sealed class AnalyticsService : IAnalyticsService
 
     public async Task<IReadOnlyList<TimelinePointDto>> GetTimelineAsync(Guid organizationId, CancellationToken ct = default)
     {
-        var since = DateTime.UtcNow.AddHours(-24);
+        var now   = DateTime.UtcNow;
+        var since = now.AddHours(-23); // 23 hours ago through the CURRENT (partial) hour = 24 buckets
 
         var raw = await _context.Notifications
             .Where(n => n.OrganizationId == organizationId && n.CreatedAt >= since)
@@ -198,10 +202,16 @@ public sealed class AnalyticsService : IAnalyticsService
 
         var buckets = Enumerable.Range(0, 24).Select(i =>
         {
-            var slot  = since.AddHours(i);
+            // i=0 -> since (now-23h) ... i=23 -> now. Includes the current, still-filling hour,
+            // which the old (0..23 from since) version silently dropped.
+            var slot  = DateTime.SpecifyKind(since.AddHours(i), DateTimeKind.Utc);
             var found = raw.FirstOrDefault(r => r.Date == slot.Date && r.Hour == slot.Hour);
             return new TimelinePointDto(
-                Hour:       slot.ToString("HH:00"),
+                // ISO 8601 UTC timestamp — NOT a pre-formatted clock string. The frontend
+                // converts to the viewer's local timezone at render time. Sending a
+                // formatted "HH:00" string here bakes in server/UTC time, which was wrong
+                // for any org member outside UTC.
+                Hour:       slot.ToString("o"),
                 Queued:     found?.Queued     ?? 0,
                 Processing: found?.Processing ?? 0,
                 Retrying:   found?.Retrying   ?? 0,
@@ -336,7 +346,7 @@ public sealed class AnalyticsService : IAnalyticsService
             c.TotalRecipients > 0
                 ? Math.Round((double)c.SentCount / c.TotalRecipients * 100, 1)
                 : (double?)null,
-            c.ScheduledAt?.ToString("h:mm tt")
+            c.ScheduledAt?.ToString("o")
         )).ToList();
 
         return new CampaignAnalyticsDto(
@@ -479,6 +489,7 @@ public sealed class AnalyticsService : IAnalyticsService
         var server        = _redis.GetServer(_redis.GetEndPoints()[0]);
         var workersOnline = server.Keys(pattern: "worker:heartbeat:*").Count();
 
+        // FIX: same as GetHealthAsync — use IsSuccess, not string-matching "success".
         var recentLogs = await _context.NotificationLogs
             .Where(l => _context.Notifications
                 .Where(n => n.OrganizationId == organizationId)
@@ -486,11 +497,11 @@ public sealed class AnalyticsService : IAnalyticsService
                 .Contains(l.NotificationId))
             .OrderByDescending(l => l.CreatedAt)
             .Take(100)
-            .Select(l => l.Response)
+            .Select(l => l.IsSuccess)
             .ToListAsync(ct);
 
         var providerSuccessRate = recentLogs.Count == 0 ? 100.0
-            : Math.Round((double)recentLogs.Count(r => r != null && r.Contains("success", StringComparison.OrdinalIgnoreCase)) / recentLogs.Count * 100, 1);
+            : Math.Round((double)recentLogs.Count(s => s) / recentLogs.Count * 100, 1);
 
         var uptime    = DateTime.UtcNow - _startedAt;
         var uptimeStr = uptime.TotalDays >= 1
@@ -550,7 +561,8 @@ public sealed class AnalyticsService : IAnalyticsService
             {
                 Provider  = g.Key,
                 Total     = g.Count(),
-                Successes = g.Count(l => l.Response != null && l.Response.Contains("success", StringComparison.OrdinalIgnoreCase)),
+                
+                Successes = g.Count(l => l.IsSuccess),
             })
             .ToListAsync(ct);
 

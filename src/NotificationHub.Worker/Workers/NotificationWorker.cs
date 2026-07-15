@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Domain.Entities;
 using NotificationHub.Domain.Enums;
+using NotificationHub.Domain.Exceptions;
 using StackExchange.Redis;
 
 namespace NotificationHub.Worker.Workers;
@@ -14,9 +15,41 @@ public class NotificationWorker : BackgroundService
     // individual workers via the "worker:heartbeat:*" key pattern.
     private readonly string _workerId = $"notification-{Guid.NewGuid():N}";
 
-    private readonly IServiceScopeFactory      _scopeFactory;
-    private readonly IConnectionMultiplexer    _redis;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IConnectionMultiplexer _redis;
     private readonly ILogger<NotificationWorker> _logger;
+
+    // ─── Concurrency ─────────────────────────────────────────────────────────
+    private const int MaxConcurrency = 50;
+    private readonly SemaphoreSlim _semaphore = new(MaxConcurrency, MaxConcurrency);
+
+    // ─── Redis keys ──────────────────────────────────────────────────────────
+    private const string QueueKey = "notification_queue";
+    private const string RetryScheduleKey = "notification_retry_schedule";
+    private const string DlqKey = "notification_dlq";
+
+    private static readonly TimeSpan[] RetryDelays =
+    {
+        TimeSpan.FromSeconds(1),
+        TimeSpan.FromSeconds(5),
+        TimeSpan.FromSeconds(15),
+        TimeSpan.FromSeconds(30),
+        TimeSpan.FromSeconds(60),
+    };
+
+    // Atomically moves every item whose retry score (unix seconds) is <= now
+    // from the sorted set into the working queue. Runs as a single Redis
+    // operation so multiple worker instances can't both promote the same item.
+    private const string PromoteDueScript = @"
+        local due = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+        if #due > 0 then
+            for i, id in ipairs(due) do
+                redis.call('ZREM', KEYS[1], id)
+                redis.call('LPUSH', KEYS[2], id)
+            end
+        end
+        return #due
+    ";
 
     public NotificationWorker(
         IServiceScopeFactory scopeFactory,
@@ -24,13 +57,15 @@ public class NotificationWorker : BackgroundService
         ILogger<NotificationWorker> logger)
     {
         _scopeFactory = scopeFactory;
-        _redis        = redis;
-        _logger       = logger;
+        _redis = redis;
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("NotificationWorker {WorkerId} started", _workerId);
+        _logger.LogInformation(
+            "NotificationWorker {WorkerId} started (max concurrency: {MaxConcurrency})",
+            _workerId, MaxConcurrency);
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -39,7 +74,15 @@ public class NotificationWorker : BackgroundService
 
             try
             {
-                await ProcessNextAsync(stoppingToken);
+                await PromoteDueRetriesAsync(stoppingToken);
+
+                var processed = await ProcessBatchAsync(stoppingToken);
+
+                if (processed == 0)
+                {
+                    // Nothing to do — avoid a tight busy loop hammering Redis.
+                    await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+                }
             }
             catch (OperationCanceledException)
             {
@@ -67,11 +110,10 @@ public class NotificationWorker : BackgroundService
         {
             var db = _redis.GetDatabase();
 
-            
             // TTL = 10 seconds. If the worker crashes the key expires automatically
             // and Analytics correctly reports it as offline.
             await db.StringSetAsync(
-                key:   $"worker:heartbeat:{_workerId}",
+                key: $"worker:heartbeat:{_workerId}",
                 value: DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
                 expiry: TimeSpan.FromSeconds(10));
         }
@@ -93,28 +135,90 @@ public class NotificationWorker : BackgroundService
         }
     }
 
-    // ─── Processing ──────────────────────────────────────────────────────────
+    // ─── Retry scheduling ────────────────────────────────────────────────────
 
-    private async Task ProcessNextAsync(CancellationToken stoppingToken)
+    // Moves any notification whose retry due-time has passed from the sorted
+    // set back into the working queue. Cheap no-op when nothing is due.
+    private async Task PromoteDueRetriesAsync(CancellationToken stoppingToken)
     {
-        var db    = _redis.GetDatabase();
-        var value = await db.ListRightPopAsync("notification_queue");
+        var db = _redis.GetDatabase();
+        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
-        if (value.IsNullOrEmpty)
+        var result = await db.ScriptEvaluateAsync(
+            PromoteDueScript,
+            keys: new RedisKey[] { RetryScheduleKey, QueueKey },
+            values: new RedisValue[] { nowUnix });
+
+        var promoted = (int)result;
+
+        if (promoted > 0)
         {
-            await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
-            return;
+            _logger.LogDebug("Promoted {Count} due retries into the queue", promoted);
+        }
+    }
+
+    // ─── Batch processing ────────────────────────────────────────────────────
+
+    // Pops up to MaxConcurrency items in one round trip and fans them out
+    // concurrently, gated by the semaphore. Returns how many were dequeued.
+    private async Task<int> ProcessBatchAsync(CancellationToken stoppingToken)
+    {
+        var db = _redis.GetDatabase();
+
+        var values = await db.ListRightPopAsync(QueueKey, MaxConcurrency);
+
+        if (values is null || values.Length == 0)
+        {
+            return 0;
         }
 
-        if (!Guid.TryParse((string?)value, out var notificationId))
+        var tasks = new List<Task>(values.Length);
+
+        foreach (var value in values)
         {
-            _logger.LogWarning("Invalid notification ID in queue: {Value}", (string?)value);
-            return;
+            if (!Guid.TryParse((string?)value, out var notificationId))
+            {
+                _logger.LogWarning("Invalid notification ID in queue: {Value}", (string?)value);
+                continue;
+            }
+
+            await _semaphore.WaitAsync(stoppingToken);
+
+            tasks.Add(ProcessOneGuardedAsync(notificationId, stoppingToken));
         }
 
-        await using var scope      = _scopeFactory.CreateAsyncScope();
-        var repository             = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
-        var provider               = scope.ServiceProvider.GetRequiredService<INotificationProvider>();
+        await Task.WhenAll(tasks);
+
+        return values.Length;
+    }
+
+    // Wraps ProcessOneAsync with the semaphore release + top-level exception
+    // handling so one bad notification can't take down the whole batch.
+    private async Task ProcessOneGuardedAsync(Guid notificationId, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await ProcessOneAsync(notificationId, stoppingToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // Shutdown mid-send — not a failure, just stop quietly.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled error processing notification {Id}", notificationId);
+        }
+        finally
+        {
+            _semaphore.Release();
+        }
+    }
+
+    private async Task ProcessOneAsync(Guid notificationId, CancellationToken stoppingToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var repository = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
+        var provider = scope.ServiceProvider.GetRequiredService<INotificationProvider>();
 
         var notification = await repository.GetByIdAsync(notificationId, stoppingToken);
         if (notification is null)
@@ -127,19 +231,29 @@ public class NotificationWorker : BackgroundService
             notification.Id, notification.RetryCount + 1);
 
         notification.AssignWorker(_workerId);
-
         await repository.SaveChangesAsync(stoppingToken);
 
-        var success = await provider.SendAsync(notification, stoppingToken);
+        bool success;
+        try
+        {
+            success = await provider.SendAsync(notification, stoppingToken);
+        }
+        catch (NonRetriableNotificationException ex)
+        {
+            // Bad payload / invalid recipient — no amount of retrying fixes this.
+            // Skip the normal backoff entirely and go straight to DLQ.
+            await MoveToDeadLetterAsync(notification, ex.Message, repository, stoppingToken);
+            return;
+        }
 
         if (success)
         {
             notification.MarkDelivered(
-            provider.GetType().Name,
-            string.Empty 
-        );
+                provider.GetType().Name,
+                string.Empty
+            );
 
-        await repository.SaveChangesAsync(stoppingToken);
+            await repository.SaveChangesAsync(stoppingToken);
 
             _logger.LogInformation(
                 "Notification {Id} sent successfully",
@@ -147,57 +261,73 @@ public class NotificationWorker : BackgroundService
         }
         else
         {
-            await HandleFailureAsync(notification, repository, db, stoppingToken);
+            await HandleFailureAsync(notification, repository, stoppingToken);
         }
     }
 
-        private async Task HandleFailureAsync(
+    // Schedules a retry by writing a due-time into the sorted set instead of
+    // blocking this task with Task.Delay. The worker stays free to process
+    // other queue items while this notification waits; PromoteDueRetriesAsync
+    // picks it back up once its score (unix timestamp) has passed.
+    private async Task HandleFailureAsync(
         Notification notification,
         INotificationRepository repository,
-        IDatabase db,
         CancellationToken stoppingToken)
     {
-        var delays = new[] { 1, 5, 15, 30, 60 };
-
         var nextAttempt = notification.RetryCount + 1;
 
-        if (nextAttempt <= delays.Length)
+        if (nextAttempt <= RetryDelays.Length)
         {
-            var delay = delays[nextAttempt - 1];
+            var delay = RetryDelays[nextAttempt - 1];
+            var dueAt = DateTime.UtcNow.Add(delay);
 
-            notification.ScheduleRetry(
-                DateTime.UtcNow.AddSeconds(delay),
-                "Provider delivery failed");
-
+            notification.ScheduleRetry(dueAt, "Provider delivery failed");
             await repository.SaveChangesAsync(stoppingToken);
 
+            var db = _redis.GetDatabase();
+            var dueUnix = new DateTimeOffset(dueAt, TimeSpan.Zero).ToUnixTimeSeconds();
+
+            await db.SortedSetAddAsync(
+                RetryScheduleKey,
+                notification.Id.ToString(),
+                dueUnix);
+
             _logger.LogWarning(
-                "Notification {Id} failed, retrying in {Delay}s (attempt {Attempt})",
+                "Notification {Id} failed, scheduled retry at {DueAt:o} in {Delay}s (attempt {Attempt})",
                 notification.Id,
-                delay,
+                dueAt,
+                delay.TotalSeconds,
                 nextAttempt);
-
-            await Task.Delay(TimeSpan.FromSeconds(delay), stoppingToken);
-
-            await db.ListLeftPushAsync(
-                "notification_queue",
-                notification.Id.ToString());
         }
         else
         {
-            notification.MoveToDeadLetter(
-                "Provider delivery failed");
-
-            await repository.SaveChangesAsync(stoppingToken);
-
-            await db.ListLeftPushAsync(
-                "notification_dlq",
-                notification.Id.ToString());
-
-            _logger.LogError(
-                "Notification {Id} moved to DLQ after {Attempts} attempts",
-                notification.Id,
-                notification.RetryCount);
+            await MoveToDeadLetterAsync(notification, "Provider delivery failed", repository, stoppingToken);
         }
     }
+
+    private async Task MoveToDeadLetterAsync(
+        Notification notification,
+        string reason,
+        INotificationRepository repository,
+        CancellationToken stoppingToken)
+    {
+        notification.MoveToDeadLetter(reason);
+
+        await repository.SaveChangesAsync(stoppingToken);
+
+        var db = _redis.GetDatabase();
+        await db.ListLeftPushAsync(DlqKey, notification.Id.ToString());
+
+        _logger.LogError(
+            "Notification {Id} moved to DLQ — {Reason} (after {Attempts} attempt(s))",
+            notification.Id,
+            reason,
+            notification.RetryCount);
     }
+
+    public override void Dispose()
+    {
+        _semaphore.Dispose();
+        base.Dispose();
+    }
+}

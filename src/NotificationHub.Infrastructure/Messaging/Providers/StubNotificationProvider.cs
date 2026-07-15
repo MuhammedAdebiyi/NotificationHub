@@ -5,6 +5,7 @@ using NotificationHub.Application.Abstractions;
 using NotificationHub.Domain.Entities;
 using NotificationHub.Domain.Enums;
 using NotificationHub.Infrastructure.Persistence;
+using NotificationHub.Domain.Exceptions;
 
 namespace NotificationHub.Infrastructure.Messaging.Providers;
 
@@ -40,25 +41,54 @@ public class StubNotificationProvider : INotificationProvider
                         "Channel {Channel} not yet implemented — notification {Id} skipped",
                         notification.Channel, notification.Id);
 
-                    await WriteLogAsync(notification, "Stub", "Channel not implemented — skipped", cancellationToken);
+                    await WriteLogAsync(notification, "Stub", "Channel not implemented — skipped", isSuccess: true, cancellationToken);
                     return true;
             }
+        }
+        catch (OperationCanceledException)
+        {
+        
+            throw;
+        }
+        catch (NonRetriableNotificationException)
+        {
+        
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Provider failed for notification {Id}", notification.Id);
-            await WriteLogAsync(notification, "SendByte", $"error: {ex.Message}", cancellationToken);
+            await WriteLogAsync(notification, "SendByte", $"error: {ex.Message}", isSuccess: false, cancellationToken);
             return false;
         }
     }
-
+     
     private async Task<bool> SendEmailAsync(
         Notification notification,
         CancellationToken cancellationToken)
     {
-        var payload = JsonSerializer.Deserialize<EmailPayload>(notification.Payload)
-            ?? throw new InvalidOperationException(
-                $"Could not deserialize email payload for notification {notification.Id}");
+        EmailPayload? payload;
+        try
+        {
+            payload = JsonSerializer.Deserialize<EmailPayload>(notification.Payload);
+        }
+        catch (JsonException ex)
+        {
+            throw new NonRetriableNotificationException(
+                $"Malformed email payload for notification {notification.Id}", ex);
+        }
+
+        if (payload is null)
+        {
+            throw new NonRetriableNotificationException(
+                $"Empty/null email payload for notification {notification.Id}");
+        }
+
+        if (string.IsNullOrWhiteSpace(notification.RecipientEmail))
+        {
+            throw new NonRetriableNotificationException(
+                $"No recipient email set for notification {notification.Id}");
+        }
 
         var to = notification.RecipientEmail;
 
@@ -80,6 +110,7 @@ public class StubNotificationProvider : INotificationProvider
             notification,
             "SendByte",
             $"accepted: id={emailId}",
+            isSuccess: true,
             cancellationToken);
 
         return true;
@@ -89,6 +120,7 @@ public class StubNotificationProvider : INotificationProvider
         Notification notification,
         string provider,
         string response,
+        bool isSuccess,
         CancellationToken cancellationToken)
     {
         try
@@ -99,6 +131,7 @@ public class StubNotificationProvider : INotificationProvider
                 OrganizationId = notification.OrganizationId,
                 Provider = provider,
                 Response = response,
+                IsSuccess = isSuccess,
             };
             _context.NotificationLogs.Add(log);
             await _context.SaveChangesAsync(cancellationToken);

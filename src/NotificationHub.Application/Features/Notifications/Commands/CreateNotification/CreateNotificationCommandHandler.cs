@@ -35,6 +35,7 @@ public class CreateNotificationCommandHandler
         var notification = new Notification
         {
             OrganizationId = request.OrganizationId,
+            CreatedByUserId = request.UserId,
             RecipientEmail = request.RecipientEmail,
             Type = request.Type,
             Channel = request.Channel,

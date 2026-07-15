@@ -41,8 +41,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
+
+function formatLocalHour(isoTimestamp: string): string {
+  const d = new Date(isoTimestamp)
+  if (Number.isNaN(d.getTime())) return isoTimestamp
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
 export default function AnalyticsPage() {
   const { overview, timeline, funnel, queue, campaigns, failures, isLoading } = useAnalytics()
+  const chartTimeline = timeline.map(p => ({ ...p, hour: formatLocalHour(p.hour) }))
 
   if (isLoading) {
     return (
@@ -116,9 +124,9 @@ export default function AnalyticsPage() {
         {/* Volume Timeline */}
         <div className="lg:col-span-2">
           <Section title="Notification Volume — Last 24h">
-            {timeline.length > 0 && timeline.some(p => p.sent > 0 || p.failed > 0) ? (
+            {chartTimeline.length > 0 && chartTimeline.some(p => p.sent > 0 || p.failed > 0) ? (
               <ResponsiveContainer width="100%" height={220}>
-                <AreaChart data={timeline}>
+                <AreaChart data={chartTimeline}>
                   <defs>
                     <linearGradient id="sentGrad" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%"  stopColor="#0E9F84" stopOpacity={0.3} />

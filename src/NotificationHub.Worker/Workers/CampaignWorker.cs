@@ -102,11 +102,16 @@ public class CampaignWorker : BackgroundService
     private static string BuildPayload(string subject, string body) =>
         JsonSerializer.Serialize(new { subject, body });
 
+    // createdByUserId: the campaign's creator, so these org-alert notifications
+    // attribute to whoever caused them. Pass null for system-only sends that
+    // no member "did" (there aren't any today, but keeping the parameter
+    // explicit avoids silently defaulting to whichever caller forgets it).
     private async Task QueueOrgNotificationsAsync(
         IOrganizationMemberRepository memberRepository,
         INotificationRepository notificationRepository,
         INotificationQueue queue,
         Guid orgId,
+        Guid? createdByUserId,
         string subject,
         string htmlBody,
         CancellationToken stoppingToken)
@@ -118,6 +123,7 @@ public class CampaignWorker : BackgroundService
             {
                 OrganizationId = orgId,
                 RecipientEmail = member.User!.Email,
+                CreatedByUserId = createdByUserId,
                 Type           = "OrgAlert",
                 Channel        = NotificationChannel.Email,
                 Payload        = BuildPayload(subject, htmlBody),
@@ -157,6 +163,7 @@ public class CampaignWorker : BackgroundService
             await QueueOrgNotificationsAsync(
                 memberRepository, notificationRepository, queue,
                 campaign.OrganizationId,
+                campaign.CreatedByUserId,
                 subject:  $"Campaign started: {campaign.Title}",
                 htmlBody: BuildScheduledStartedEmail(
                     campaign.Title, campaign.Subject, scheduledTime,
@@ -207,6 +214,7 @@ public class CampaignWorker : BackgroundService
                 await QueueOrgNotificationsAsync(
                     memberRepository, notificationRepository, queue,
                     campaign.OrganizationId,
+                    campaign.CreatedByUserId,
                     subject:  $"Campaign sending now: {campaign.Title}",
                     htmlBody: BuildSendingNowEmail(
                         campaign.Title, campaign.Subject,
@@ -265,6 +273,7 @@ public class CampaignWorker : BackgroundService
                 await QueueOrgNotificationsAsync(
                     memberRepository, notificationRepository, queue,
                     campaign.OrganizationId,
+                    campaign.CreatedByUserId,
                     subject:  $"Campaign completed: {campaign.Title}",
                     htmlBody: BuildCompletedEmail(
                         campaign.Title, campaign.Subject, startedTime,
@@ -285,6 +294,7 @@ public class CampaignWorker : BackgroundService
                     OrganizationId = campaign.OrganizationId,
                     RecipientEmail = recipient.RecipientEmail,
                     CampaignId     = campaign.Id,            // ← now a real FK on Notification
+                    CreatedByUserId = campaign.CreatedByUserId,
                     Type           = $"Campaign_{campaign.Title}",
                     Channel        = campaign.Channel,
                     Payload        = JsonSerializer.Serialize(new

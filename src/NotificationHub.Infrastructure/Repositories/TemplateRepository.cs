@@ -42,7 +42,11 @@ public class TemplateRepository : ITemplateRepository
         return await _context.Templates
             .CountAsync(t => t.OrganizationId == organizationId && t.DeletedAt == null, cancellationToken);
     }
-
+    public async Task<int> CountByUserAsync(Guid organizationId, Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Templates
+            .CountAsync(t => t.OrganizationId == organizationId && t.CreatedByUserId == userId && t.DeletedAt == null, cancellationToken);
+    }
     public async Task DeleteAsync(Guid id, Guid organizationId, CancellationToken cancellationToken = default)
     {
         var template = await _context.Templates

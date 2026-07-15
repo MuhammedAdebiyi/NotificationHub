@@ -93,7 +93,7 @@ function diffMs(a?: string | null, b?: string | null): number | null {
 /** Attempts a human-readable read of an email-shaped payload. Falls back to null if the
  *  payload doesn't look like an email (no subject/body-ish fields), so callers can fall
  *  back to raw JSON instead of showing a misleading empty card. */
-function parseEmailPreview(raw: string): { subject?: string; body?: string } | null {
+function parseEmailPreview(raw: string): { subject?: string; body?: string; isHtml: boolean } | null {
   try {
     const obj = JSON.parse(raw)
     const lower: Record<string, unknown> = {}
@@ -105,7 +105,8 @@ function parseEmailPreview(raw: string): { subject?: string; body?: string } | n
       (lower['text'] as string) ||
       (lower['message'] as string)
     if (!subject && !body) return null
-    return { subject, body }
+    const isHtml = typeof body === 'string' && /<[a-z][\s\S]*>/i.test(body)
+    return { subject, body, isHtml }
   } catch {
     return null
   }
@@ -263,7 +264,7 @@ export default function NotificationDetailPage() {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
           <MetricCard label="Delivery Time" value={isTerminal ? formatMs(deliveryTimeMs) : '—'} />
           <MetricCard label="Queue Wait" value={formatMs(queueWaitMs)} />
-          <MetricCard label="Attempts" value={String(notification.retryCount)} />
+          <MetricCard label="Attempts" value={String(Math.max(notification.retryCount, notification.logs.length, 1))} />
           <MetricCard label="Worker" value={notification.workerId ?? '—'} mono />
           <MetricCard label="Channel" value={notification.channel} />
         </div>
@@ -446,8 +447,20 @@ export default function NotificationDetailPage() {
             {emailPreview.body && (
               <>
                 <p className="text-xs text-ink/40 mb-1">Body</p>
-                <div className="text-sm text-ink/80 whitespace-pre-wrap leading-relaxed border-t border-ink/10 pt-3">
-                  {emailPreview.body}
+                <div className="border-t border-ink/10 pt-3">
+                  {emailPreview.isHtml ? (
+                    
+                    <iframe
+                      title="Email preview"
+                      srcDoc={emailPreview.body}
+                      sandbox=""
+                      className="w-full h-[420px] rounded-lg border border-ink/10 bg-white"
+                    />
+                  ) : (
+                    <div className="text-sm text-ink/80 whitespace-pre-wrap leading-relaxed">
+                      {emailPreview.body}
+                    </div>
+                  )}
                 </div>
               </>
             )}

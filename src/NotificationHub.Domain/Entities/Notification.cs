@@ -11,6 +11,8 @@ public class Notification : BaseEntity
     // Ownership
     public Guid OrganizationId { get; set; }
     public Guid? CampaignId { get; set; }
+    public Guid? CreatedByUserId { get; set; }
+    public bool IsSuccess { get; set; } 
 
     // Recipient
     public string RecipientEmail { get; set; } = string.Empty;

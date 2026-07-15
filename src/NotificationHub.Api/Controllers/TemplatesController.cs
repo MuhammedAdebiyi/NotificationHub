@@ -15,11 +15,13 @@ public class TemplatesController : ControllerBase
 {
     private readonly ITemplateRepository _repository;
     private readonly ICurrentOrganization _currentOrg;
+    private readonly ICurrentUser _currentUser;
 
-    public TemplatesController(ITemplateRepository repository, ICurrentOrganization currentOrg)
+    public TemplatesController(ITemplateRepository repository, ICurrentOrganization currentOrg, ICurrentUser currentUser)
     {
         _repository = repository;
         _currentOrg = currentOrg;
+        _currentUser = currentUser;
     }
 
     [HttpGet]
@@ -65,9 +67,13 @@ public class TemplatesController : ControllerBase
         if (_currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
+        if (_currentUser.UserId is null)
+            return Unauthorized(new { error = "No user context." });
+
         var template = new Template
         {
             OrganizationId = _currentOrg.OrganizationId.Value,
+            CreatedByUserId = _currentUser.UserId.Value,
             Name = request.Name,
             Subject = request.Subject,
             Body = request.Body,

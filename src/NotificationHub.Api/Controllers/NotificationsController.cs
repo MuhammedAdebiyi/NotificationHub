@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Application.Features.Notifications.Commands.CreateNotification;
-using NotificationHub.Application.Features.Notifications.Queries.GetNotificationById;
 using NotificationHub.Application.Features.Notifications.Queries.GetNotifications;
 using NotificationHub.Shared.Abstractions;
 
@@ -18,15 +17,18 @@ public class NotificationsController : ControllerBase
 {
     private readonly IMediator _mediator;
     private readonly ICurrentOrganization _currentOrg;
+    private readonly ICurrentUser _currentUser;
     private readonly INotificationService _notificationService;
 
     public NotificationsController(
         IMediator mediator,
         ICurrentOrganization currentOrg,
+        ICurrentUser currentUser,
         INotificationService notificationService)
     {
         _mediator = mediator;
         _currentOrg = currentOrg;
+        _currentUser = currentUser;
         _notificationService = notificationService;
     }
 
@@ -39,8 +41,12 @@ public class NotificationsController : ControllerBase
         if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
+        if (_currentUser.UserId is null)
+            return Unauthorized(new { error = "No user context." });
+
         var command = new CreateNotificationCommand(
             _currentOrg.OrganizationId.Value,
+            _currentUser.UserId.Value,
             request.RecipientEmail,
             request.Type,
             request.Channel,
