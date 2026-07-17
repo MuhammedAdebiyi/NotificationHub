@@ -1,13 +1,8 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-WORKDIR /src
-
-COPY . .
-RUN dotnet restore src/NotificationHub.Api/NotificationHub.Api.csproj
-RUN dotnet publish src/NotificationHub.Api/NotificationHub.Api.csproj -c Release -o /app/publish --no-restore
-
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
+
+RUN apt-get update && apt-get install -y libkrb5-3 && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "NotificationHub.Api.dll"]
