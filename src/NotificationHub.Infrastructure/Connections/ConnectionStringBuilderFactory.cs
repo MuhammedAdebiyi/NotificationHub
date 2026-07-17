@@ -45,7 +45,6 @@ public static class ConnectionStringBuilderFactory
         var builder = new SqlConnectionStringBuilder(raw)
         {
             ConnectTimeout = ConnectTimeoutSeconds
-            // SqlCommand.CommandTimeout is set per-command, not on the builder — applied below
         };
         return builder.ConnectionString;
     }
