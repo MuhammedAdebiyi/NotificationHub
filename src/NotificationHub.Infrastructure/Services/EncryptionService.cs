@@ -34,7 +34,6 @@ public class EncryptionService : IEncryptionService
         using var aesGcm = new AesGcm(_key, TagSize);
         aesGcm.Encrypt(nonce, plaintextBytes, ciphertext, tag);
 
-        // Layout: nonce || tag || ciphertext
         var result = new byte[NonceSize + TagSize + ciphertext.Length];
         Buffer.BlockCopy(nonce, 0, result, 0, NonceSize);
         Buffer.BlockCopy(tag, 0, result, NonceSize, TagSize);
