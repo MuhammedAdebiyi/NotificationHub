@@ -69,6 +69,15 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IDataSourceRepository, DataSourceRepository>();
         services.AddScoped<IDataSourceService, DataSourceService>();
         services.AddScoped<ISchemaInspectionService, SchemaInspectionService>();
+
+        // Data Sources / Import
+        services.AddScoped<IEncryptionService, EncryptionService>();
+        services.AddScoped<IConnectionTestService, ConnectionTestService>();
+        services.AddScoped<ISchemaInspectionService, SchemaInspectionService>();
+        services.AddScoped<IDataSourceRepository, DataSourceRepository>();
+        services.AddScoped<IDataSourceService, DataSourceService>();
+        services.AddScoped<IImportJobRepository, ImportJobRepository>();
+        services.AddScoped<IImportDataReader, ImportDataReader>();
         
         // Email provider
         services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();
