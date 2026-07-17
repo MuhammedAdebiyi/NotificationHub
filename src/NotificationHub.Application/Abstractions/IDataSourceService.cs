@@ -17,4 +17,5 @@ public interface IDataSourceService
     Task<DataSource> CreateAsync(CreateDataSourceCommand command, CancellationToken cancellationToken = default);
     Task<List<string>> GetTablesAsync(Guid dataSourceId, Guid organizationId, CancellationToken cancellationToken = default);
     Task<List<ColumnInfo>> GetColumnsAsync(Guid dataSourceId, Guid organizationId, string tableName, CancellationToken cancellationToken = default);
+    Task DeleteAsync(Guid dataSourceId, Guid organizationId, CancellationToken cancellationToken = default);
 }

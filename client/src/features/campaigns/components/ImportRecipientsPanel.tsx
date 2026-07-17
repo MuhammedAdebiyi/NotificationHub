@@ -3,6 +3,12 @@ import { useDataSources } from '@/features/datasources/hooks/useDataSources'
 import { dataSourceApi } from '@/features/datasources/api/dataSourceApi'
 import { importApi } from '../api/importApi'
 import type { ImportJob } from '../types/import.types'
+import type { ColumnInfo } from '@/features/datasources/types/dataSource.types'
+
+function isUsable(status: string) {
+  const s = status.toLowerCase()
+  return !s.includes('fail') && !s.includes('error')
+}
 
 export default function ImportRecipientsPanel({
   campaignId,
@@ -11,13 +17,15 @@ export default function ImportRecipientsPanel({
   campaignId: string
   onImportStarted: (job: ImportJob) => void
 }) {
-  const { dataSources, isLoading: loadingSources } = useDataSources()
+  const { dataSources, isLoading: loadingSources, reload } = useDataSources()
+  const usableSources = dataSources.filter(ds => isUsable(ds.status))
+  const failedCount = dataSources.length - usableSources.length
 
   const [dataSourceId, setDataSourceId] = useState('')
   const [tables, setTables] = useState<string[]>([])
   const [loadingTables, setLoadingTables] = useState(false)
   const [tableName, setTableName] = useState('')
-  const [columns, setColumns] = useState<string[]>([])
+  const [columns, setColumns] = useState<ColumnInfo[]>([])
   const [loadingColumns, setLoadingColumns] = useState(false)
 
   const [primaryKeyColumn, setPrimaryKeyColumn] = useState('')
@@ -29,7 +37,6 @@ export default function ImportRecipientsPanel({
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
 
-  // Reset downstream selections whenever the data source changes
   useEffect(() => {
     setTables([])
     setTableName('')
@@ -48,7 +55,6 @@ export default function ImportRecipientsPanel({
       .finally(() => setLoadingTables(false))
   }, [dataSourceId])
 
-  // Reset column selections whenever the table changes
   useEffect(() => {
     setColumns([])
     setPrimaryKeyColumn('')
@@ -89,11 +95,15 @@ export default function ImportRecipientsPanel({
 
   const canSubmit = dataSourceId && tableName && primaryKeyColumn && emailColumn
 
-  if (!loadingSources && dataSources.length === 0) {
+  if (!loadingSources && usableSources.length === 0) {
     return (
       <div className="border-2 border-dashed border-ink/15 rounded-xl p-8 text-center text-ink/40 text-sm">
-        No data sources connected yet —{' '}
-        <a href="/settings/data-sources" className="text-violet underline">connect one first</a>
+        {dataSources.length === 0 ? (
+          <>No data sources connected yet — </>
+        ) : (
+          <>All {dataSources.length} connected data source{dataSources.length !== 1 ? 's' : ''} failed to connect — </>
+        )}
+        <a href="/settings" className="text-violet underline">manage data sources</a>
       </div>
     )
   }
@@ -105,7 +115,16 @@ export default function ImportRecipientsPanel({
       )}
 
       <div>
-        <label className="block text-sm font-medium mb-1">Data Source</label>
+        <div className="flex items-center justify-between mb-1">
+          <label className="block text-sm font-medium">Data Source</label>
+          <button
+            type="button"
+            onClick={() => reload()}
+            className="text-xs text-violet hover:underline"
+          >
+            Refresh
+          </button>
+        </div>
         <select
           className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet"
           value={dataSourceId}
@@ -113,10 +132,20 @@ export default function ImportRecipientsPanel({
           disabled={loadingSources}
         >
           <option value="">{loadingSources ? 'Loading...' : 'Select a data source'}</option>
-          {dataSources.map(ds => (
+          {usableSources.map(ds => (
             <option key={ds.id} value={ds.id}>{ds.name} ({ds.type})</option>
           ))}
         </select>
+        {failedCount > 0 && (
+          <p className="text-xs text-ink/40 mt-1">
+            {failedCount} failed source{failedCount !== 1 ? 's' : ''} hidden —{' '}
+            <a href="/settings" className="text-violet underline">manage in Settings</a>
+          </p>
+        )}
+        <p className="text-xs text-ink/40 mt-1">
+          Don't see the one you need?{' '}
+          <a href="/settings" className="text-violet underline">add a new data source</a>
+        </p>
       </div>
 
       {dataSourceId && (
@@ -146,7 +175,9 @@ export default function ImportRecipientsPanel({
                 disabled={loadingColumns}
               >
                 <option value="">{loadingColumns ? 'Loading columns...' : 'Select column'}</option>
-                {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                {columns.map(c => (
+                  <option key={c.name} value={c.name}>{c.name} ({c.dataType})</option>
+                ))}
               </select>
               <p className="text-xs text-ink/40 mt-1">Must be an integer or UUID column.</p>
             </div>
@@ -159,7 +190,9 @@ export default function ImportRecipientsPanel({
                 disabled={loadingColumns}
               >
                 <option value="">{loadingColumns ? 'Loading columns...' : 'Select column'}</option>
-                {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                {columns.map(c => (
+                  <option key={c.name} value={c.name}>{c.name} ({c.dataType})</option>
+                ))}
               </select>
             </div>
           </div>
@@ -174,7 +207,9 @@ export default function ImportRecipientsPanel({
                 disabled={loadingColumns}
               >
                 <option value="">None</option>
-                {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                {columns.map(c => (
+                  <option key={c.name} value={c.name}>{c.name} ({c.dataType})</option>
+                ))}
               </select>
             </div>
             <div>
@@ -186,7 +221,9 @@ export default function ImportRecipientsPanel({
                 disabled={loadingColumns}
               >
                 <option value="">None</option>
-                {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                {columns.map(c => (
+                  <option key={c.name} value={c.name}>{c.name} ({c.dataType})</option>
+                ))}
               </select>
             </div>
           </div>

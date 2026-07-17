@@ -1,5 +1,6 @@
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Domain.Entities;
+using NotificationHub.Domain.Enums;
 using NotificationHub.Infrastructure.Connections;
 
 namespace NotificationHub.Infrastructure.Services;
@@ -71,6 +72,20 @@ public class DataSourceService : IDataSourceService
         var dataSource = await GetOwnedDataSourceOrThrow(dataSourceId, organizationId, cancellationToken);
         var connectionString = _encryptionService.Decrypt(dataSource.EncryptedConnectionString);
         return await _schemaInspectionService.GetColumnsAsync(dataSource.Type, connectionString, tableName, cancellationToken);
+    }
+
+    public async Task DeleteAsync(
+        Guid dataSourceId, Guid organizationId, CancellationToken cancellationToken = default)
+    {
+        var dataSource = await GetOwnedDataSourceOrThrow(dataSourceId, organizationId, cancellationToken);
+
+        var hasImportJobs = await _repository.HasImportJobsAsync(dataSourceId, cancellationToken);
+        if (hasImportJobs)
+            throw new InvalidOperationException(
+                "This data source has import history attached to it and can't be deleted. " +
+                "Contact support if it needs to be removed.");
+
+        await _repository.DeleteAsync(dataSource, cancellationToken);
     }
 
     private async Task<DataSource> GetOwnedDataSourceOrThrow(

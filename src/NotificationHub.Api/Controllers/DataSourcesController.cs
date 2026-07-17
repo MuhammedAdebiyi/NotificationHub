@@ -49,23 +49,24 @@ public class DataSourcesController : ControllerBase
         });
     }
 
-[HttpGet("{id:guid}/tables")]
-public async Task<IActionResult> GetTables(Guid id, CancellationToken cancellationToken)
-{
-    if (_currentOrg.OrganizationId is null)
-        return Unauthorized(new { error = "No organization context." });
+    [HttpGet("{id:guid}/tables")]
+    public async Task<IActionResult> GetTables(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
 
-    try
-    {
-        var tables = await _dataSourceService.GetTablesAsync(
-            id, _currentOrg.OrganizationId.Value, cancellationToken);
-        return Ok(new { tables });
+        try
+        {
+            var tables = await _dataSourceService.GetTablesAsync(
+                id, _currentOrg.OrganizationId.Value, cancellationToken);
+            return Ok(new { tables });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
     }
-    catch (InvalidOperationException ex)
-    {
-        return BadRequest(new { error = ex.Message });
-    }
-}
+
     [HttpGet("{id:guid}/tables/{tableName}/columns")]
     public async Task<IActionResult> GetColumns(Guid id, string tableName, CancellationToken cancellationToken)
     {
@@ -83,7 +84,7 @@ public async Task<IActionResult> GetTables(Guid id, CancellationToken cancellati
             return BadRequest(new { error = ex.Message });
         }
     }
-    
+
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
@@ -123,6 +124,23 @@ public async Task<IActionResult> GetTables(Guid id, CancellationToken cancellati
             ), cancellationToken);
 
             return Ok(ToResponse(dataSource));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        try
+        {
+            await _dataSourceService.DeleteAsync(id, _currentOrg.OrganizationId.Value, cancellationToken);
+            return Ok(new { deleted = true });
         }
         catch (InvalidOperationException ex)
         {

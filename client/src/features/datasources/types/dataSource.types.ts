@@ -3,9 +3,6 @@ export type DataSourceType =
   | 'Neon' | 'Supabase' | 'PlanetScale'
   | 'Csv' | 'MongoDb' | 'Airtable' | 'GoogleSheets'
 
-// Only these are wired up for import today (ToSqlProtocol() on the backend
-// returns null for the rest — Csv/MongoDb/Airtable/GoogleSheets need a
-// different adapter shape that doesn't exist yet).
 export const SQL_CAPABLE_TYPES: DataSourceType[] = [
   'PostgreSql', 'MySql', 'SqlServer', 'Neon', 'Supabase', 'PlanetScale',
 ]
@@ -20,6 +17,12 @@ export interface DataSource {
   lastTestedAt: string | null
   lastError: string | null
   createdAt: string
+}
+
+export interface ColumnInfo {
+  name: string
+  dataType: string
+  isNullable: boolean
 }
 
 export interface CreateDataSourcePayload {

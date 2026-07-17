@@ -11,4 +11,8 @@ public interface IDataSourceRepository
 
     Task<(List<DataSource> Items, int TotalCount)> GetPagedAsync(
         Guid organizationId, int page, int pageSize, CancellationToken cancellationToken = default);
+
+    Task DeleteAsync(DataSource dataSource, CancellationToken cancellationToken = default);
+
+    Task<bool> HasImportJobsAsync(Guid dataSourceId, CancellationToken cancellationToken = default);
 }

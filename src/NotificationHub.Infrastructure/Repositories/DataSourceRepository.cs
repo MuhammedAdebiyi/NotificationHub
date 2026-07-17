@@ -43,4 +43,16 @@ public class DataSourceRepository : IDataSourceRepository
 
         return (items, totalCount);
     }
+
+    public async Task DeleteAsync(DataSource dataSource, CancellationToken cancellationToken = default)
+    {
+        _context.DataSources.Remove(dataSource);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<bool> HasImportJobsAsync(Guid dataSourceId, CancellationToken cancellationToken = default)
+    {
+        return await _context.ImportJobs
+            .AnyAsync(j => j.DataSourceId == dataSourceId, cancellationToken);
+    }
 }

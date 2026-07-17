@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { apiClient } from '@/shared/services/apiClient'
 import { authService } from '@/shared/services/auth.service'
+import DataSourcesSection from '@/features/settings/components/DataSourcesSection'
 
 interface ApiKey {
   id: string
@@ -260,6 +261,9 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        {/* Data Sources section */}
+        <DataSourcesSection />
 
         {/* Org info — read only for now */}
         <div className="bg-white border border-ink/10 rounded-xl p-6">

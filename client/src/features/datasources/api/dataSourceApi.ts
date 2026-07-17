@@ -1,6 +1,7 @@
 import { apiClient } from '@/shared/services/apiClient'
 import type {
   DataSource,
+  ColumnInfo,
   CreateDataSourcePayload,
   PaginatedDataSources,
 } from '../types/dataSource.types'
@@ -19,7 +20,10 @@ export const dataSourceApi = {
     apiClient.get<{ tables: string[] }>(`/api/v1/datasources/${id}/tables`),
 
   getColumns: (id: string, tableName: string) =>
-    apiClient.get<{ tableName: string; columns: string[] }>(
+    apiClient.get<{ tableName: string; columns: ColumnInfo[] }>(
       `/api/v1/datasources/${id}/tables/${encodeURIComponent(tableName)}/columns`
     ),
+
+  delete: (id: string) =>
+    apiClient.delete<{ deleted: boolean }>(`/api/v1/datasources/${id}`),
 }
