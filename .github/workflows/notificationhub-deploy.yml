@@ -5,6 +5,9 @@ on:
     branches: [ main ]
     paths:
       - 'src/**'
+      - 'Dockerfile.api'
+      - 'Dockerfile.worker'
+      - '.github/workflows/notificationhub-deploy.yml'
 
 jobs:
   build-and-push-api:
