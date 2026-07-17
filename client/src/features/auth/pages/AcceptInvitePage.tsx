@@ -37,20 +37,22 @@ export default function AcceptInvitePage() {
     }
 
     apiClient
-      .get<InviteInfo>(`/api/v1/org/invites/validate?token=${encodeURIComponent(token)}`)
-      .then((info) => {
-        setInviteInfo(info)
-        // Check if already logged in with this email
-        if (authService.isAuthenticated()) {
-          setIsExistingUser(true)
-        }
-        setStatus('ready')
-      })
-      .catch((err: Error) => {
-        setStatus('error')
-        setErrorMessage(err.message || 'This invite is invalid or has expired.')
-      })
-  }, [token])
+    .get<InviteInfo>(`/api/v1/org/invites/validate?token=${encodeURIComponent(token)}`)
+    .then((info) => {
+      setInviteInfo(info)
+
+      const loggedInUser = authService.getUser()
+      const matchesInvite =
+        loggedInUser?.email?.toLowerCase() === info.email.toLowerCase()
+
+      setIsExistingUser(matchesInvite)
+      setStatus('ready')
+    })
+    .catch((err: Error) => {
+      setStatus('error')
+      setErrorMessage(err.message || 'This invite is invalid or has expired.')
+    })
+    }, [token])
 
   async function handleAccept(e: React.FormEvent) {
     e.preventDefault()
