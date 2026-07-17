@@ -145,6 +145,54 @@ public class CampaignService : ICampaignService
         return new AddRecipientsResult(newRecipients.Count, emails.Count - newRecipients.Count);
     }
 
+    public async Task<AddRecipientsResult> AddRecipientsWithNamesAsync(
+        AddRecipientsWithNamesDto dto, CancellationToken cancellationToken = default)
+    {
+        var campaign = await _campaignRepository.GetByIdAsync(
+            dto.CampaignId, dto.OrganizationId, cancellationToken)
+            ?? throw new InvalidOperationException("Campaign not found.");
+
+        if (campaign.Status != CampaignStatus.Draft)
+            throw new InvalidOperationException("Can only add recipients to a draft campaign.");
+
+        var deduped = dto.Recipients
+            .Where(r => !string.IsNullOrWhiteSpace(r.Email) && r.Email.Contains('@'))
+            .GroupBy(r => r.Email.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
+
+        if (deduped.Count == 0)
+            throw new InvalidOperationException("No valid email addresses found.");
+
+        var newRecipients = new List<CampaignRecipient>();
+        foreach (var r in deduped)
+        {
+            var email = r.Email.Trim().ToLowerInvariant();
+            var exists = await _campaignRepository.RecipientExistsAsync(
+                dto.CampaignId, email, cancellationToken);
+            if (!exists)
+            {
+                newRecipients.Add(new CampaignRecipient
+                {
+                    CampaignId = dto.CampaignId,
+                    OrganizationId = dto.OrganizationId,
+                    RecipientEmail = email,
+                    FirstName = r.FirstName,
+                    LastName = r.LastName,
+                });
+            }
+        }
+
+        if (newRecipients.Count > 0)
+        {
+            await _campaignRepository.AddRecipientsAsync(newRecipients, cancellationToken);
+            campaign.TotalRecipients += newRecipients.Count;
+            await _campaignRepository.SaveChangesAsync(cancellationToken);
+        }
+
+        return new AddRecipientsResult(newRecipients.Count, deduped.Count - newRecipients.Count);
+    }
+
     public async Task SendAsync(
         Guid campaignId, Guid organizationId, Guid? triggeredByUserId,
         CancellationToken cancellationToken = default)

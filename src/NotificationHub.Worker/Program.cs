@@ -7,9 +7,6 @@ using NotificationHub.Worker.Workers;
 var builder = Host.CreateApplicationBuilder(args);
 
 builder.Logging.SetMinimumLevel(LogLevel.Debug);
-builder.Services.AddHostedService<CampaignWorker>();
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(
@@ -20,8 +17,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             errorCodesToAdd: null)));
 
 builder.Services.AddInfrastructure(builder.Configuration);
+
+builder.Services.AddHostedService<CampaignWorker>();
 builder.Services.AddHostedService<KeepAliveWorker>();
 builder.Services.AddHostedService<NotificationWorker>();
+builder.Services.AddHostedService<ImportWorker>();
 
 var host = builder.Build();
 host.Run();
