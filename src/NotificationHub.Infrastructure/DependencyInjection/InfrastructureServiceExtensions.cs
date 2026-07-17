@@ -54,10 +54,21 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<ICurrentOrganization, CurrentOrganization>();
         services.AddScoped<CurrentOrganization>();
 
+        // Data Sources
+        services.AddScoped<IEncryptionService, EncryptionService>();
+        services.AddScoped<IConnectionTestService, ConnectionTestService>();
+
         // Campaigns
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<ICampaignService, CampaignService>();
         services.AddScoped<IOrgNotificationService, OrgNotificationService>();
+
+        // Data Sources
+        services.AddScoped<IEncryptionService, EncryptionService>();
+        services.AddScoped<IConnectionTestService, ConnectionTestService>();
+        services.AddScoped<IDataSourceRepository, DataSourceRepository>();
+        services.AddScoped<IDataSourceService, DataSourceService>();
+        services.AddScoped<ISchemaInspectionService, SchemaInspectionService>();
         
         // Email provider
         services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();

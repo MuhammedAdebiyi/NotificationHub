@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using NotificationHub.Infrastructure.Persistence;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace NotificationHub.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260716143514_AddDataSourceAndImportJob")]
+    partial class AddDataSourceAndImportJob
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -159,14 +162,6 @@ namespace NotificationHub.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("FirstName")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("LastName")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<Guid?>("NotificationId")
                         .HasColumnType("uuid");
 
@@ -276,8 +271,9 @@ namespace NotificationHub.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("CampaignId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("ColumnMapping")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime?>("CompletedAt")
                         .HasColumnType("timestamp with time zone");
@@ -291,17 +287,8 @@ namespace NotificationHub.Infrastructure.Migrations
                     b.Property<Guid>("DataSourceId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("EmailColumn")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
                     b.Property<int>("ErrorCount")
                         .HasColumnType("integer");
-
-                    b.Property<string>("FirstNameColumn")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("LastCursorId")
                         .HasMaxLength(100)
@@ -310,20 +297,11 @@ namespace NotificationHub.Infrastructure.Migrations
                     b.Property<string>("LastError")
                         .HasColumnType("text");
 
-                    b.Property<string>("LastNameColumn")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                    b.Property<long>("NotificationsCreated")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid>("OrganizationId")
                         .HasColumnType("uuid");
-
-                    b.Property<string>("PrimaryKeyColumn")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<long>("RecipientsAdded")
-                        .HasColumnType("bigint");
 
                     b.Property<long>("RowsRead")
                         .HasColumnType("bigint");
@@ -341,13 +319,7 @@ namespace NotificationHub.Infrastructure.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
-                    b.Property<string>("WhereClause")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("CampaignId");
 
                     b.HasIndex("DataSourceId");
 
@@ -780,12 +752,6 @@ namespace NotificationHub.Infrastructure.Migrations
 
             modelBuilder.Entity("NotificationHub.Domain.Entities.ImportJob", b =>
                 {
-                    b.HasOne("NotificationHub.Domain.Entities.Campaign", "Campaign")
-                        .WithMany()
-                        .HasForeignKey("CampaignId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.HasOne("NotificationHub.Domain.Entities.DataSource", "DataSource")
                         .WithMany("ImportJobs")
                         .HasForeignKey("DataSourceId")
@@ -797,8 +763,6 @@ namespace NotificationHub.Infrastructure.Migrations
                         .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Campaign");
 
                     b.Navigation("DataSource");
 

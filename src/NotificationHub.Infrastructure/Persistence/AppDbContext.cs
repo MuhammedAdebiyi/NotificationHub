@@ -16,9 +16,13 @@ public class AppDbContext : DbContext
     public DbSet<NotificationLog> NotificationLogs => Set<NotificationLog>();
     public DbSet<IdempotencyKey> IdempotencyKeys => Set<IdempotencyKey>();
     public DbSet<Template> Templates => Set<Template>();
+    public DbSet<DataSource> DataSources => Set<DataSource>();
+    public DbSet<ImportJob> ImportJobs => Set<ImportJob>();
     public DbSet<Campaign> Campaigns => Set<Campaign>();
     public DbSet<CampaignRecipient> CampaignRecipients => Set<CampaignRecipient>();
     public DbSet<VerificationToken> VerificationTokens => Set<VerificationToken>();
+   
+
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

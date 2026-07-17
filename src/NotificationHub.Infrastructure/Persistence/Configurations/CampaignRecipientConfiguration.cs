@@ -11,6 +11,8 @@ public class CampaignRecipientConfiguration : IEntityTypeConfiguration<CampaignR
         builder.HasKey(r => r.Id);
 
         builder.Property(r => r.RecipientEmail).IsRequired().HasMaxLength(320);
+        builder.Property(r => r.FirstName).HasMaxLength(100);
+        builder.Property(r => r.LastName).HasMaxLength(100);
 
         builder.HasIndex(r => new { r.CampaignId, r.RecipientEmail }).IsUnique();
 
