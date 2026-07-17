@@ -3,8 +3,11 @@ import { useParams, useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { campaignApi } from '../api/campaignApi'
 import { apiClient } from '@/shared/services/apiClient'
-import CampaignProgressPanel from "@/features/campaigns/components/CampaignProgressPanel";
+import CampaignProgressPanel from "@/features/campaigns/components/CampaignProgressPanel"
+import ImportRecipientsPanel from "@/features/campaigns/components/ImportRecipientsPanel"
+import ImportProgressPanel from "@/features/campaigns/components/ImportProgressPanel"
 import type { CampaignDetail, CampaignStatus } from '../types/campaign.types'
+import type { ImportJob } from '../types/import.types'
 
 interface CampaignNotification {
   publicId: string
@@ -26,7 +29,7 @@ const statusStyle: Record<CampaignStatus, string> = {
   Cancelled: 'bg-ink/10 text-ink/40',
 }
 
-type InputMode = 'paste' | 'csv'
+type InputMode = 'paste' | 'csv' | 'database'
 
 export default function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -48,6 +51,7 @@ export default function CampaignDetailPage() {
   const [notifications, setNotifications] = useState<CampaignNotification[]>([])
   const [failedCount, setFailedCount] = useState(0)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [activeImportJobId, setActiveImportJobId] = useState<string | null>(null)
 
   async function load() {
     if (!id) return
@@ -70,16 +74,16 @@ export default function CampaignDetailPage() {
   }
 
   useEffect(() => {
-  load()
+    load()
 
-  const interval = setInterval(() => {
-    if (campaignRef.current?.status?.toLowerCase() === 'running') {
-      load()
-    }
-  }, 5000)
+    const interval = setInterval(() => {
+      if (campaignRef.current?.status?.toLowerCase() === 'running') {
+        load()
+      }
+    }, 5000)
 
-  return () => clearInterval(interval)
-}, [id])
+    return () => clearInterval(interval)
+  }, [id])
 
   function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -131,6 +135,15 @@ export default function CampaignDetailPage() {
     } finally {
       setAddingRecipients(false)
     }
+  }
+
+  function handleImportStarted(job: ImportJob) {
+    setActiveImportJobId(job.id)
+    setActionError(null)
+  }
+
+  async function handleImportComplete() {
+    await load()
   }
 
   async function handleAction(action: 'send' | 'schedule' | 'pause' | 'resume' | 'delete') {
@@ -347,8 +360,8 @@ export default function CampaignDetailPage() {
                 : 'No recipients yet — add some to send this campaign'}
             </p>
 
-            <div className="flex gap-2 mb-4">
-              {(['paste', 'csv'] as InputMode[]).map(mode => (
+            <div className="flex gap-2 mb-4 flex-wrap">
+              {(['paste', 'csv', 'database'] as InputMode[]).map(mode => (
                 <button
                   key={mode}
                   onClick={() => setInputMode(mode)}
@@ -358,7 +371,7 @@ export default function CampaignDetailPage() {
                       : 'border border-ink/20 text-ink/60 hover:bg-fog'
                   }`}
                 >
-                  {mode === 'paste' ? 'Paste emails' : 'CSV upload'}
+                  {mode === 'paste' ? 'Paste emails' : mode === 'csv' ? 'CSV upload' : 'Import from Database'}
                 </button>
               ))}
             </div>
@@ -369,64 +382,77 @@ export default function CampaignDetailPage() {
               </div>
             )}
 
-            <form onSubmit={handleAddRecipients} className="space-y-3">
-              {inputMode === 'paste' && (
-                <>
-                  <textarea
-                    className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet h-40 resize-none font-mono bg-white"
-                    placeholder={`user@example.com\nanother@example.com`}
-                    value={recipientInput}
-                    onChange={e => setRecipientInput(e.target.value)}
+            {inputMode === 'database' ? (
+              <>
+                <ImportRecipientsPanel campaignId={campaign.id} onImportStarted={handleImportStarted} />
+                {activeImportJobId && (
+                  <ImportProgressPanel
+                    campaignId={campaign.id}
+                    importJobId={activeImportJobId}
+                    onComplete={handleImportComplete}
                   />
-                  <p className="text-xs text-ink/40">
-                    Separate by comma, newline, or semicolon.
-                    {recipientInput && ` ${recipientInput.split(/[\n,;\s]+/).filter(s => s.includes('@')).length} valid emails detected.`}
-                  </p>
-                </>
-              )}
+                )}
+              </>
+            ) : (
+              <form onSubmit={handleAddRecipients} className="space-y-3">
+                {inputMode === 'paste' && (
+                  <>
+                    <textarea
+                      className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet h-40 resize-none font-mono bg-white"
+                      placeholder={`user@example.com\nanother@example.com`}
+                      value={recipientInput}
+                      onChange={e => setRecipientInput(e.target.value)}
+                    />
+                    <p className="text-xs text-ink/40">
+                      Separate by comma, newline, or semicolon.
+                      {recipientInput && ` ${recipientInput.split(/[\n,;\s]+/).filter(s => s.includes('@')).length} valid emails detected.`}
+                    </p>
+                  </>
+                )}
 
-              {inputMode === 'csv' && (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full border-2 border-dashed border-ink/20 rounded-xl p-8 text-center cursor-pointer hover:border-violet/40 hover:bg-violet/5 transition"
+                {inputMode === 'csv' && (
+                  <div
+                    onClick={() => fileInputRef.current?.click()}
+                    className="w-full border-2 border-dashed border-ink/20 rounded-xl p-8 text-center cursor-pointer hover:border-violet/40 hover:bg-violet/5 transition"
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".csv,.txt"
+                      onChange={handleCsvUpload}
+                      className="hidden"
+                    />
+                    {csvEmails.length > 0 ? (
+                      <>
+                        <p className="font-medium text-teal">{csvFileName}</p>
+                        <p className="text-sm text-ink/50 mt-1">{csvEmails.length} valid emails found</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-ink/40 text-sm">Click to upload CSV or TXT file</p>
+                        <p className="text-xs text-ink/30 mt-1">One email per line, or comma separated</p>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={
+                    addingRecipients ||
+                    (inputMode === 'paste' && !recipientInput.trim()) ||
+                    (inputMode === 'csv' && csvEmails.length === 0)
+                  }
+                  className="w-full bg-ink text-white text-sm font-medium py-2.5 rounded-lg hover:bg-violet transition disabled:opacity-50"
                 >
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".csv,.txt"
-                    onChange={handleCsvUpload}
-                    className="hidden"
-                  />
-                  {csvEmails.length > 0 ? (
-                    <>
-                      <p className="font-medium text-teal">{csvFileName}</p>
-                      <p className="text-sm text-ink/50 mt-1">{csvEmails.length} valid emails found</p>
-                    </>
-                  ) : (
-                    <>
-                      <p className="text-ink/40 text-sm">Click to upload CSV or TXT file</p>
-                      <p className="text-xs text-ink/30 mt-1">One email per line, or comma separated</p>
-                    </>
-                  )}
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={
-                  addingRecipients ||
-                  (inputMode === 'paste' && !recipientInput.trim()) ||
-                  (inputMode === 'csv' && csvEmails.length === 0)
-                }
-                className="w-full bg-ink text-white text-sm font-medium py-2.5 rounded-lg hover:bg-violet transition disabled:opacity-50"
-              >
-                {addingRecipients
-                  ? 'Adding...'
-                  : inputMode === 'csv' && csvEmails.length > 0
-                  ? `Add ${csvEmails.length} recipients`
-                  : 'Add Recipients'}
-              </button>
-            </form>
+                  {addingRecipients
+                    ? 'Adding...'
+                    : inputMode === 'csv' && csvEmails.length > 0
+                    ? `Add ${csvEmails.length} recipients`
+                    : 'Add Recipients'}
+                </button>
+              </form>
+            )}
           </div>
         )}
       </div>
@@ -473,10 +499,10 @@ export default function CampaignDetailPage() {
                     </td>
                     <td className="px-4 py-3">
                       {(n.status === 'DeadLetter' || n.status === 'Failed') && (
-                      <a
+                      <a>
                         href={`/notifications/${n.publicId}`}
                         className="text-xs text-violet hover:underline"
-                      >
+                      
                         View & retry →
                       </a>
                     )}

@@ -21,6 +21,7 @@ import SelectOrg from '@/pages/SelectOrg'
 import VerifyEmail from '@/pages/VerifyEmail'
 import AccessRevoked from '@/pages/AccessRevoked'
 import CampaignDetail from '@/pages/CampaignDetail'
+import DataSourcesPage from '@/features/datasources/pages/DataSourcesPage'
 
 
 
@@ -53,6 +54,7 @@ export default function AppRouter() {
         <Route path="/campaigns/:id" element={<ProtectedRoute><CampaignDetail /></ProtectedRoute>} />
         <Route path="/team/:memberId" element={<ProtectedRoute><TeamMember /></ProtectedRoute>} />
         <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+        <Route path="/settings/data-sources" element={<DataSourcesPage />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
         
