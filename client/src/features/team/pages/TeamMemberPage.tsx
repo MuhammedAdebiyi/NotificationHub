@@ -87,6 +87,22 @@ export default function TeamMemberPage() {
     }
   }
 
+  async function handleDelete() {
+    if (!member) return
+    if (!confirm(
+      `Permanently remove ${member.user.fullName} from this organization? This cannot be undone — they'll need a new invite to rejoin.`
+    )) return
+    setActionLoading(true)
+    setError(null)
+    try {
+      await apiClient.delete(`/api/v1/org/members/${memberId}`)
+      navigate('/users')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to remove member.')
+      setActionLoading(false)
+    }
+  }
+
   const roleStyle: Record<string, string> = {
     owner: 'bg-violet/10 text-violet',
     admin: 'bg-teal/10 text-teal',
@@ -241,6 +257,19 @@ export default function TeamMemberPage() {
                 {member.isRevoked
                   ? 'Restoring gives them back member access.'
                   : "They can still log in but won't be able to use this org."}
+              </p>
+            </div>
+
+            <div className="border-t border-ink/5 pt-4">
+              <button
+                onClick={handleDelete}
+                disabled={actionLoading}
+                className="w-full text-sm py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition disabled:opacity-50"
+              >
+                {actionLoading ? 'Removing...' : 'Remove from organization'}
+              </button>
+              <p className="text-xs text-ink/40 mt-2 text-center">
+                This permanently deletes their membership. They'll need a new invite to rejoin.
               </p>
             </div>
           </div>

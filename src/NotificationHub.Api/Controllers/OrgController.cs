@@ -174,8 +174,18 @@ public class OrgController : ControllerBase
         if (member.UserId == _currentUser.UserId)
             return BadRequest(new { error = "Cannot remove yourself." });
 
-        await _memberRepository.RemoveAsync(member, cancellationToken);
-        await _memberRepository.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _memberRepository.RemoveAsync(member, cancellationToken);
+            await _memberRepository.SaveChangesAsync(cancellationToken);
+        }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateException)
+        {
+            return BadRequest(new
+            {
+                error = "This member could not be removed because they still have data linked to this organization (e.g. campaigns or templates they created). Revoke their access instead, or reassign their data first."
+            });
+        }
 
         return Ok(new { removed = true });
     }
