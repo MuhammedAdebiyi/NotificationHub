@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Domain.Entities;
@@ -11,6 +12,8 @@ namespace NotificationHub.Infrastructure.Messaging.Providers;
 
 public class StubNotificationProvider : INotificationProvider
 {
+    private const string CampaignFromEmail = "campaigns@coursevaultai.app";
+
     private readonly IEmailProvider _emailProvider;
     private readonly ILogger<StubNotificationProvider> _logger;
     private readonly AppDbContext _context;
@@ -91,9 +94,10 @@ public class StubNotificationProvider : INotificationProvider
         }
 
         var to = notification.RecipientEmail;
+        var from = await ResolveFromAddressAsync(notification.OrganizationId, cancellationToken);
 
         var message = new EmailMessage(
-            From: "NotificationHub <noreply@coursevaultai.app>",
+            From: from,
             To: to,
             Subject: payload.Subject,
             Html: $"<p>{payload.Body}</p>",
@@ -103,8 +107,8 @@ public class StubNotificationProvider : INotificationProvider
         var emailId = await _emailProvider.SendAsync(message, cancellationToken);
 
         _logger.LogInformation(
-            "Email sent via SendByte for notification {Id} to {To}",
-            notification.Id, to);
+            "Email sent via SendByte for notification {Id} to {To} from {From}",
+            notification.Id, to, from);
 
         await WriteLogAsync(
             notification,
@@ -114,6 +118,30 @@ public class StubNotificationProvider : INotificationProvider
             cancellationToken);
 
         return true;
+    }
+
+    // Every Notification row is created by CampaignWorker (see architecture notes —
+    // Import/other flows never create Notification rows directly), so this is always
+    // an org-branded campaign send. The display name is per-org (Organization.FromName);
+    // the email address stays on our verified sending domain since SES only lets us
+    // send from identities we've verified — orgs can't bring their own arbitrary From
+    // address without a full domain-verification flow, which doesn't exist yet.
+    private async Task<string> ResolveFromAddressAsync(Guid organizationId, CancellationToken cancellationToken)
+    {
+        var fromName = await _context.Organizations
+            .Where(o => o.Id == organizationId)
+            .Select(o => o.FromName)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(fromName))
+        {
+            _logger.LogWarning(
+                "Organization {OrgId} has no FromName configured — falling back to NotificationHub default",
+                organizationId);
+            return $"NotificationHub <{CampaignFromEmail}>";
+        }
+
+        return $"{fromName} <{CampaignFromEmail}>";
     }
 
     private async Task WriteLogAsync(

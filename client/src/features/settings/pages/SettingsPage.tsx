@@ -14,6 +14,15 @@ interface ApiKey {
   lastUsedAt: string | null
 }
 
+interface OrgInfo {
+  id: string
+  name: string
+  slug: string
+  plan: string
+  fromName: string
+  createdAt: string
+}
+
 function PermissionWall() {
   const navigate = useNavigate()
   return (
@@ -94,6 +103,13 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null)
 
+  const [orgInfo, setOrgInfo] = useState<OrgInfo | null>(null)
+  const [orgLoading, setOrgLoading] = useState(true)
+  const [fromName, setFromName] = useState('')
+  const [savingFromName, setSavingFromName] = useState(false)
+  const [fromNameSaved, setFromNameSaved] = useState(false)
+  const [fromNameError, setFromNameError] = useState<string | null>(null)
+
   // Members see permission wall immediately
   if (!canManage) return <PermissionWall />
 
@@ -108,7 +124,22 @@ export default function SettingsPage() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  async function loadOrgInfo() {
+    try {
+      const res = await apiClient.get<OrgInfo>('/api/v1/org/info')
+      setOrgInfo(res)
+      setFromName(res.fromName ?? '')
+    } catch {
+      // fail silently
+    } finally {
+      setOrgLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+    loadOrgInfo()
+  }, [])
 
   async function handleCreate() {
     if (!newKeyName.trim()) return
@@ -141,6 +172,22 @@ export default function SettingsPage() {
       await load()
     } catch {
       setRevokeTarget(null)
+    }
+  }
+
+  async function handleSaveFromName() {
+    if (!fromName.trim()) return
+    setSavingFromName(true)
+    setFromNameSaved(false)
+    setFromNameError(null)
+    try {
+      await apiClient.put<{ updated: boolean; fromName: string }>('/api/v1/org/info', { fromName: fromName.trim() })
+      setFromNameSaved(true)
+      setOrgInfo(prev => prev ? { ...prev, fromName: fromName.trim() } : prev)
+    } catch (err) {
+      setFromNameError(err instanceof Error ? err.message : 'Failed to save sender name.')
+    } finally {
+      setSavingFromName(false)
     }
   }
 
@@ -265,24 +312,58 @@ export default function SettingsPage() {
         {/* Data Sources section */}
         <DataSourcesSection />
 
-        {/* Org info — read only for now */}
+        {/* Org info */}
         <div className="bg-white border border-ink/10 rounded-xl p-6">
           <h2 className="font-display font-bold text-lg mb-1">Organization</h2>
           <p className="text-xs text-ink/40 mb-4">Your organization details.</p>
-          <div className="space-y-3 text-sm">
-            <div className="flex justify-between py-2 border-b border-ink/5">
-              <span className="text-ink/50">Plan</span>
-              <span className="font-medium capitalize">{currentUser?.role === 'owner' ? 'Free' : '—'}</span>
+
+          {orgLoading ? (
+            <p className="text-sm text-ink/40 py-4 text-center">Loading...</p>
+          ) : (
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between py-2 border-b border-ink/5">
+                <span className="text-ink/50">Plan</span>
+                <span className="font-medium capitalize">{orgInfo?.plan ?? '—'}</span>
+              </div>
+              <div className="flex justify-between py-2 border-b border-ink/5">
+                <span className="text-ink/50">Your role</span>
+                <span className="font-medium capitalize">{currentRole}</span>
+              </div>
+
+              <div className="py-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-ink/50">Sender name</span>
+                  <span className="text-xs text-ink/30 font-mono">@coursevaultai.app</span>
+                </div>
+                <p className="text-xs text-ink/40 mb-2">
+                  This is the name recipients see when your campaigns land in their inbox —
+                  e.g. "{fromName || 'CourseVault'} &lt;campaigns@coursevaultai.app&gt;".
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    className="flex-1 border border-ink/20 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet"
+                    placeholder="e.g. CourseVault"
+                    value={fromName}
+                    onChange={e => { setFromName(e.target.value); setFromNameSaved(false); setFromNameError(null) }}
+                    maxLength={100}
+                  />
+                  <button
+                    onClick={handleSaveFromName}
+                    disabled={savingFromName || !fromName.trim() || fromName.trim() === orgInfo?.fromName}
+                    className="text-xs px-3 py-1.5 bg-ink text-white rounded-lg hover:bg-violet transition disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {savingFromName ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+                {fromNameError && (
+                  <p className="text-xs text-coral mt-1">{fromNameError}</p>
+                )}
+                {fromNameSaved && !fromNameError && (
+                  <p className="text-xs text-teal mt-1">✓ Saved</p>
+                )}
+              </div>
             </div>
-            <div className="flex justify-between py-2 border-b border-ink/5">
-              <span className="text-ink/50">Your role</span>
-              <span className="font-medium capitalize">{currentRole}</span>
-            </div>
-            <div className="flex justify-between py-2">
-              <span className="text-ink/50">Sending domain</span>
-              <span className="font-mono text-xs text-ink/60">noreply@mail.notificationhub.io</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
     </AppLayout>

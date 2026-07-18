@@ -88,6 +88,33 @@ public class OrgController : ControllerBase
             createdAt = org.CreatedAt,
         });
     }
+    [HttpPut("info")]
+    public async Task<IActionResult> UpdateOrgInfo(
+        [FromBody] UpdateOrgInfoRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        if (_currentOrg.Role != "owner" && _currentOrg.Role != "admin")
+            return Forbid();
+
+        var org = await _orgRepository.GetByIdAsync(_currentOrg.OrganizationId.Value, cancellationToken);
+        if (org is null)
+            return NotFound(new { error = "Organization not found." });
+
+        if (string.IsNullOrWhiteSpace(request.FromName))
+            return BadRequest(new { error = "FromName cannot be empty." });
+
+        if (request.FromName.Length > 100)
+            return BadRequest(new { error = "FromName must be 100 characters or fewer." });
+
+        org.FromName = request.FromName.Trim();
+        await _orgRepository.SaveChangesAsync(cancellationToken);
+
+        return Ok(new { updated = true, fromName = org.FromName });
+    }
+
     [HttpGet("members")]
     public async Task<IActionResult> GetMembers(CancellationToken cancellationToken)
     {
@@ -500,6 +527,7 @@ public class OrgController : ControllerBase
     }
 }
 
+public record UpdateOrgInfoRequest(string FromName);
 public record SendInviteRequest(string Email, string? Role);
 public record UpdateRoleRequest(string Role);
 public record AcceptInviteRequest(string Token, string? FullName, string? Password);
