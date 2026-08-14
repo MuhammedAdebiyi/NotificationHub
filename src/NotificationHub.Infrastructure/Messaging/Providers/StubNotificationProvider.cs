@@ -61,7 +61,7 @@ public class StubNotificationProvider : INotificationProvider
         catch (Exception ex)
         {
             _logger.LogError(ex, "Provider failed for notification {Id}", notification.Id);
-            await WriteLogAsync(notification, "SendByte", $"error: {ex.Message}", isSuccess: false, cancellationToken);
+            await WriteLogAsync(notification, "Resend", $"error: {ex.Message}", isSuccess: false, cancellationToken);
             return false;
         }
     }
@@ -107,12 +107,12 @@ public class StubNotificationProvider : INotificationProvider
         var emailId = await _emailProvider.SendAsync(message, cancellationToken);
 
         _logger.LogInformation(
-            "Email sent via SendByte for notification {Id} to {To} from {From}",
+            "Email sent via Resend for notification {Id} to {To} from {From}",
             notification.Id, to, from);
 
         await WriteLogAsync(
             notification,
-            "SendByte",
+            "Resend",
             $"accepted: id={emailId}",
             isSuccess: true,
             cancellationToken);

@@ -80,7 +80,7 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IImportDataReader, ImportDataReader>();
         
         // Email provider
-        services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();
+        services.AddHttpClient<IEmailProvider, ResendEmailProvider>();
 
         // Notification provider
         services.AddScoped<INotificationProvider, StubNotificationProvider>();

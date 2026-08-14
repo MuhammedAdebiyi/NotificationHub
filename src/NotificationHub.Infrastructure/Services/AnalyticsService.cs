@@ -58,7 +58,7 @@ public sealed class AnalyticsService : IAnalyticsService
                           : "healthy";
 
         // FIX: use the IsSuccess flag the worker already sets, instead of string-matching
-        // the word "success" inside the raw provider response text (SendByte's actual
+        // the word "success" inside the raw provider response text (the provider's actual
         // response format, e.g. "accepted: id=...", never contains that word).
         var recentLogs = await _context.NotificationLogs
             .Where(l => _context.Notifications
@@ -78,7 +78,7 @@ public sealed class AnalyticsService : IAnalyticsService
             new("Database", dbLatency < 100 ? "healthy" : "degraded",           LatencyMs: dbLatency,    Workers: null,         SuccessRate: null),
             new("Redis",    redisLatency < 50 ? "healthy" : "degraded",         LatencyMs: redisLatency, Workers: null,         SuccessRate: null),
             new("Worker",   workersOnline > 0 ? "healthy" : "down",             LatencyMs: null,         Workers: workersOnline, SuccessRate: null),
-            new("SendByte", providerSuccessRate >= 98 ? "healthy" : "degraded", LatencyMs: null,         Workers: null,         SuccessRate: providerSuccessRate),
+            new("Resend", providerSuccessRate >= 98 ? "healthy" : "degraded", LatencyMs: null,         Workers: null,         SuccessRate: providerSuccessRate),
         };
 
         return new AnalyticsHealthDto(overallStatus, successRate, queueLatencyMs, workersOnline, null, components);
@@ -512,7 +512,7 @@ public sealed class AnalyticsService : IAnalyticsService
             Database: new DbComponentDto(dbLatency < 100 ? "healthy" : "degraded", dbLatency),
             Redis:    new RedisComponentDto(redisLatency < 50 ? "healthy" : "degraded", redisLatency),
             Workers:  new WorkerComponentDto(workersOnline > 0 ? "healthy" : "down", workersOnline, 200),
-            Provider: new ProviderComponentDto("SendByte", providerSuccessRate >= 98 ? "healthy" : "degraded", providerSuccessRate, 480),
+            Provider: new ProviderComponentDto("Resend", providerSuccessRate >= 98 ? "healthy" : "degraded", providerSuccessRate, 480),
             Api:      new ApiComponentDto("healthy", uptimeStr)
         );
     }
