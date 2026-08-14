@@ -363,23 +363,58 @@ public class OrgController : ControllerBase
         await _inviteRepository.AddAsync(invite, cancellationToken);
         await _inviteRepository.SaveChangesAsync(cancellationToken);
 
+        await SendInviteEmailAsync(invite, org?.Name ?? "an organization", cancellationToken);
+
+        return Ok(new { invited = true, email = request.Email });
+    }
+
+    [HttpPost("invites/{id:guid}/resend")]
+    public async Task<IActionResult> ResendInvite(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        if (_currentOrg.Role != "owner" && _currentOrg.Role != "admin")
+            return Forbid();
+
+        var orgId = _currentOrg.OrganizationId.Value;
+
+        var invite = await _inviteRepository.GetByIdAsync(id, orgId, cancellationToken);
+        if (invite is null)
+            return NotFound(new { error = "Invite not found." });
+
+        if (invite.IsAccepted)
+            return BadRequest(new { error = "This invite has already been accepted." });
+
+        invite.ExpiresAt = _clock.UtcNow.AddDays(7);
+        await _inviteRepository.SaveChangesAsync(cancellationToken);
+
+        var org = await _orgRepository.GetByIdAsync(orgId, cancellationToken);
+        await SendInviteEmailAsync(invite, org?.Name ?? "an organization", cancellationToken);
+
+        return Ok(new { resent = true, email = invite.Email });
+    }
+
+    private async Task SendInviteEmailAsync(
+        OrgInvite invite,
+        string orgName,
+        CancellationToken cancellationToken)
+    {
         var frontendUrl = _configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173";
-        var link = $"{frontendUrl}/accept-invite?token={token}";
+        var link = $"{frontendUrl}/accept-invite?token={invite.Token}";
 
         await _emailProvider.SendAsync(new EmailMessage(
-            From: "NotificationHub <no-reply@coursevaultai.app>",
-            To: request.Email,
-            Subject: $"You've been invited to join {org?.Name ?? "an organization"} on NotificationHub",
+            From: "NotificationHub <noreply@coursevaultai.app>",
+            To: invite.Email,
+            Subject: $"You've been invited to join {orgName} on NotificationHub",
             Html: $"""
                 <h2>You've been invited</h2>
-                <p>You've been invited to join <strong>{org?.Name ?? "an organization"}</strong> on NotificationHub as a <strong>{invite.Role}</strong>.</p>
+                <p>You've been invited to join <strong>{orgName}</strong> on NotificationHub as a <strong>{invite.Role}</strong>.</p>
                 <p><a href="{link}" style="background:#7c3aed;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">Accept Invite</a></p>
                 <p style="color:#888;font-size:12px;">This invite expires in 7 days.</p>
                 """,
-            Text: $"You've been invited to join {org?.Name ?? "an organization"} on NotificationHub. Accept here: {link}"
+            Text: $"You've been invited to join {orgName} on NotificationHub. Accept here: {link}"
         ), cancellationToken);
-
-        return Ok(new { invited = true, email = request.Email });
     }
 
     [HttpDelete("invites/{id:guid}")]

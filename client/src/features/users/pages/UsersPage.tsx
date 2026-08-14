@@ -41,6 +41,8 @@ export default function UsersPage() {
   const [inviteLoading, setInviteLoading] = useState(false)
   const [inviteError, setInviteError] = useState<string | null>(null)
   const [inviteSuccess, setInviteSuccess] = useState(false)
+  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [resendStatus, setResendStatus] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -88,6 +90,21 @@ export default function UsersPage() {
       await load()
     } catch {
       // fail silently
+    }
+  }
+
+  async function handleResendInvite(e: React.MouseEvent, id: string) {
+    e.stopPropagation()
+    setResendingId(id)
+    setResendStatus(null)
+    try {
+      await apiClient.post(`/api/v1/org/invites/${id}/resend`)
+      setResendStatus(id)
+      setTimeout(() => setResendStatus(null), 2500)
+    } catch {
+      // fail silently
+    } finally {
+      setResendingId(null)
     }
   }
 
@@ -183,12 +200,25 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3 text-ink/40">—</td>
                   <td className="px-4 py-3">
-                    <button
-                      onClick={(e) => handleCancelInvite(e, i.id)}
-                      className="text-xs text-red-400 hover:text-red-600 transition"
-                    >
-                      Cancel
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={(e) => handleResendInvite(e, i.id)}
+                        disabled={resendingId === i.id}
+                        className="text-xs text-violet hover:text-violet/70 transition disabled:opacity-50"
+                      >
+                        {resendingId === i.id
+                          ? 'Resending…'
+                          : resendStatus === i.id
+                            ? 'Sent ✓'
+                            : 'Resend'}
+                      </button>
+                      <button
+                        onClick={(e) => handleCancelInvite(e, i.id)}
+                        className="text-xs text-red-400 hover:text-red-600 transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
