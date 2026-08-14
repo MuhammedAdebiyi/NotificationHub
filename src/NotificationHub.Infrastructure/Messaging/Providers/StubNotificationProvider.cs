@@ -128,20 +128,24 @@ public class StubNotificationProvider : INotificationProvider
     // address without a full domain-verification flow, which doesn't exist yet.
     private async Task<string> ResolveFromAddressAsync(Guid organizationId, CancellationToken cancellationToken)
     {
-        var fromName = await _context.Organizations
+        var org = await _context.Organizations
             .Where(o => o.Id == organizationId)
-            .Select(o => o.FromName)
+            .Select(o => new { o.FromName, o.FromEmail })
             .FirstOrDefaultAsync(cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(fromName))
+        var fromEmail = string.IsNullOrWhiteSpace(org?.FromEmail)
+            ? CampaignFromEmail
+            : org.FromEmail;
+
+        if (string.IsNullOrWhiteSpace(org?.FromName))
         {
             _logger.LogWarning(
                 "Organization {OrgId} has no FromName configured — falling back to NotificationHub default",
                 organizationId);
-            return $"NotificationHub <{CampaignFromEmail}>";
+            return $"NotificationHub <{fromEmail}>";
         }
 
-        return $"{fromName} <{CampaignFromEmail}>";
+        return $"{org.FromName} <{fromEmail}>";
     }
 
     private async Task WriteLogAsync(

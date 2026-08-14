@@ -20,8 +20,15 @@ interface OrgInfo {
   slug: string
   plan: string
   fromName: string
+  fromEmail: string
   createdAt: string
 }
+
+const SENDER_EMAIL_OPTIONS = [
+  'campaigns@coursevaultai.app',
+  'notifications@coursevaultai.app',
+  'hello@coursevaultai.app',
+]
 
 function PermissionWall() {
   const navigate = useNavigate()
@@ -110,6 +117,11 @@ export default function SettingsPage() {
   const [fromNameSaved, setFromNameSaved] = useState(false)
   const [fromNameError, setFromNameError] = useState<string | null>(null)
 
+  const [fromEmail, setFromEmail] = useState('')
+  const [savingFromEmail, setSavingFromEmail] = useState(false)
+  const [fromEmailSaved, setFromEmailSaved] = useState(false)
+  const [fromEmailError, setFromEmailError] = useState<string | null>(null)
+
   // Members see permission wall immediately
   if (!canManage) return <PermissionWall />
 
@@ -129,6 +141,7 @@ export default function SettingsPage() {
       const res = await apiClient.get<OrgInfo>('/api/v1/org/info')
       setOrgInfo(res)
       setFromName(res.fromName ?? '')
+      setFromEmail(res.fromEmail ?? 'campaigns@coursevaultai.app')
     } catch {
       // fail silently
     } finally {
@@ -188,6 +201,25 @@ export default function SettingsPage() {
       setFromNameError(err instanceof Error ? err.message : 'Failed to save sender name.')
     } finally {
       setSavingFromName(false)
+    }
+  }
+
+  async function handleSaveFromEmail() {
+    if (!fromEmail.trim()) return
+    setSavingFromEmail(true)
+    setFromEmailSaved(false)
+    setFromEmailError(null)
+    try {
+      await apiClient.put<{ updated: boolean; fromEmail: string }>('/api/v1/org/info', {
+        fromName: fromName.trim() || orgInfo?.fromName || '',
+        fromEmail: fromEmail.trim(),
+      })
+      setFromEmailSaved(true)
+      setOrgInfo(prev => prev ? { ...prev, fromEmail: fromEmail.trim() } : prev)
+    } catch (err) {
+      setFromEmailError(err instanceof Error ? err.message : 'Failed to save sender email.')
+    } finally {
+      setSavingFromEmail(false)
     }
   }
 
@@ -359,6 +391,44 @@ export default function SettingsPage() {
                   <p className="text-xs text-coral mt-1">{fromNameError}</p>
                 )}
                 {fromNameSaved && !fromNameError && (
+                  <p className="text-xs text-teal mt-1">✓ Saved</p>
+                )}
+              </div>
+
+              <div className="py-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-ink/50">Sender email</span>
+                  <span className="text-xs text-ink/30 font-mono">@coursevaultai.app</span>
+                </div>
+                <p className="text-xs text-ink/40 mb-2">
+                  The address your campaigns are sent from. Pick the one recipients should see
+                  and reply to.
+                </p>
+                <div className="flex gap-2">
+                  <select
+                    className="flex-1 border border-ink/20 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet"
+                    value={fromEmail}
+                    onChange={e => { setFromEmail(e.target.value); setFromEmailSaved(false); setFromEmailError(null) }}
+                  >
+                    {!SENDER_EMAIL_OPTIONS.includes(fromEmail) && fromEmail && (
+                      <option value={fromEmail}>{fromEmail}</option>
+                    )}
+                    {SENDER_EMAIL_OPTIONS.map(opt => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={handleSaveFromEmail}
+                    disabled={savingFromEmail || !fromEmail.trim() || fromEmail.trim() === orgInfo?.fromEmail}
+                    className="text-xs px-3 py-1.5 bg-ink text-white rounded-lg hover:bg-violet transition disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {savingFromEmail ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+                {fromEmailError && (
+                  <p className="text-xs text-coral mt-1">{fromEmailError}</p>
+                )}
+                {fromEmailSaved && !fromEmailError && (
                   <p className="text-xs text-teal mt-1">✓ Saved</p>
                 )}
               </div>

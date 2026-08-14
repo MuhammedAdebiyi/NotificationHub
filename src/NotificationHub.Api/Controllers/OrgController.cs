@@ -85,6 +85,7 @@ public class OrgController : ControllerBase
             slug = org.Slug,
             plan = org.Plan,
             fromName = org.FromName,
+            fromEmail = org.FromEmail,
             createdAt = org.CreatedAt,
         });
     }
@@ -109,10 +110,22 @@ public class OrgController : ControllerBase
         if (request.FromName.Length > 100)
             return BadRequest(new { error = "FromName must be 100 characters or fewer." });
 
+        if (!string.IsNullOrWhiteSpace(request.FromEmail))
+        {
+            if (request.FromEmail.Length > 200)
+                return BadRequest(new { error = "FromEmail must be 200 characters or fewer." });
+
+            if (!request.FromEmail.Contains('@'))
+                return BadRequest(new { error = "FromEmail must be a valid email address." });
+        }
+
         org.FromName = request.FromName.Trim();
+        if (!string.IsNullOrWhiteSpace(request.FromEmail))
+            org.FromEmail = request.FromEmail.Trim();
+
         await _orgRepository.SaveChangesAsync(cancellationToken);
 
-        return Ok(new { updated = true, fromName = org.FromName });
+        return Ok(new { updated = true, fromName = org.FromName, fromEmail = org.FromEmail });
     }
 
     [HttpGet("members")]
@@ -562,7 +575,7 @@ public class OrgController : ControllerBase
     }
 }
 
-public record UpdateOrgInfoRequest(string FromName);
+public record UpdateOrgInfoRequest(string FromName, string? FromEmail = null);
 public record SendInviteRequest(string Email, string? Role);
 public record UpdateRoleRequest(string Role);
 public record AcceptInviteRequest(string Token, string? FullName, string? Password);
