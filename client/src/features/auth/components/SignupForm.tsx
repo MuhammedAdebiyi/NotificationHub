@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { useSignup } from '../hooks/useSignup'
 
+function validatePassword(password: string): string | null {
+  if (password.length < 8) return 'Password must be at least 8 characters.'
+  if (!/[A-Z]/.test(password)) return 'Password must contain an uppercase letter.'
+  if (!/[a-z]/.test(password)) return 'Password must contain a lowercase letter.'
+  if (!/[0-9]/.test(password)) return 'Password must contain a number.'
+  return null
+}
+
 export default function SignupForm() {
   const { signup, isLoading, error, success } = useSignup()
   const [form, setForm] = useState({
@@ -10,13 +18,24 @@ export default function SignupForm() {
     password: '',
     confirmPassword: '',
   })
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm({ ...form, [e.target.name]: e.target.value })
+    setValidationError(null)
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (form.password !== form.confirmPassword) {
+      setValidationError('Passwords do not match.')
+      return
+    }
+    const pwError = validatePassword(form.password)
+    if (pwError) {
+      setValidationError(pwError)
+      return
+    }
     signup(form)
   }
 
@@ -30,10 +49,12 @@ export default function SignupForm() {
     )
   }
 
+  const displayError = validationError ?? error
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {error && (
-        <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-xl">{error}</div>
+      {displayError && (
+        <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-xl">{displayError}</div>
       )}
 
       <input
@@ -64,10 +85,11 @@ export default function SignupForm() {
       <input
         type="password"
         name="password"
-        placeholder="Password"
+        placeholder="Password (min 8 chars, uppercase, lowercase, number)"
         value={form.password}
         onChange={handleChange}
         required
+        minLength={8}
         className="w-full bg-fog border border-ink/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet"
       />
       <input

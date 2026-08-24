@@ -1,5 +1,5 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using NotificationHub.Application.Abstractions;
 
@@ -9,6 +9,7 @@ public class ApiKeyMiddleware
 {
     private readonly RequestDelegate _next;
     private const string ApiKeyHeader = "X-Api-Key";
+    public const string AuthenticationScheme = "ApiKey";
 
     public ApiKeyMiddleware(RequestDelegate next)
     {
@@ -64,8 +65,18 @@ public class ApiKeyMiddleware
             await repo.StampLastUsedAsync(matchedKey.Id, DateTime.UtcNow);
         });
 
-        context.Items["OrganizationId"] = matchedKey.OrganizationId;
-        context.Items["OrgRole"] = "service";
+        // Build a ClaimsPrincipal so [Authorize] and CurrentOrganization work.
+        // API keys are org-scoped (not user-scoped), so we use the org ID as the
+        // NameIdentifier claim and set role to "service" to distinguish from JWT users.
+        var orgId = matchedKey.OrganizationId.ToString();
+        var claims = new[]
+        {
+            new Claim(ClaimTypes.NameIdentifier, orgId),
+            new Claim("org_id", orgId),
+            new Claim(ClaimTypes.Role, "service"),
+        };
+        var identity = new ClaimsIdentity(claims, AuthenticationScheme);
+        context.User = new ClaimsPrincipal(identity);
 
         await _next(context);
     }

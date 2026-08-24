@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { apiClient } from '@/shared/services/apiClient'
 import { authService } from '@/shared/services/auth.service'
+import { ROLES, canManageMembers } from '@/shared/utils/roles'
 
 interface MemberProfile {
   id: string
@@ -28,8 +29,8 @@ export default function TeamMemberPage() {
   const { memberId } = useParams<{ memberId: string }>()
   const navigate = useNavigate()
   const currentUser = authService.getUser()
-  const currentRole = currentUser?.role ?? 'member'
-  const canManage = currentRole === 'owner' || currentRole === 'admin'
+  const currentRole = currentUser?.role ?? ROLES.MEMBER
+  const canManage = canManageMembers(currentRole)
 
   const [member, setMember] = useState<MemberProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -104,10 +105,10 @@ export default function TeamMemberPage() {
   }
 
   const roleStyle: Record<string, string> = {
-    owner: 'bg-violet/10 text-violet',
-    admin: 'bg-teal/10 text-teal',
-    member: 'bg-fog text-ink/60',
-    revoked: 'bg-red-100 text-red-600',
+    [ROLES.OWNER]: 'bg-violet/10 text-violet',
+    [ROLES.ADMIN]: 'bg-teal/10 text-teal',
+    [ROLES.MEMBER]: 'bg-fog text-ink/60',
+    [ROLES.REVOKED]: 'bg-red-100 text-red-600',
   }
 
   if (isLoading) return (
@@ -211,7 +212,7 @@ export default function TeamMemberPage() {
         </div>
 
         {/* Actions card — only for owner/admin, and not on owner members */}
-        {canManage && member.role !== 'owner' && (
+        {canManage && member.role !== ROLES.OWNER && (
           <div className="bg-white border border-ink/10 rounded-xl p-6 space-y-4 h-fit">
             <p className="font-display font-bold text-sm uppercase tracking-wide text-ink/40">Actions</p>
 

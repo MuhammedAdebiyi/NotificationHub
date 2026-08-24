@@ -17,6 +17,13 @@ public class OrgMembershipMiddleware
         if (context.User.Identity?.IsAuthenticated == true &&
             currentOrganization.OrganizationId is not null)
         {
+            // API keys are org-scoped directly — no user membership row to validate
+            if (context.User.Identity.AuthenticationType == ApiKeyMiddleware.AuthenticationScheme)
+            {
+                await _next(context);
+                return;
+            }
+
             var isActive = await currentOrganization.IsMemberActiveAsync();
 
             if (!isActive)

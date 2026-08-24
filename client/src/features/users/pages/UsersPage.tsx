@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { apiClient } from '@/shared/services/apiClient'
 import { authService } from '@/shared/services/auth.service'
+import { ROLES, canManageMembers } from '@/shared/utils/roles'
 
 interface Member {
   id: string
@@ -29,8 +30,8 @@ interface Invite {
 export default function UsersPage() {
   const navigate = useNavigate()
   const currentUser = authService.getUser()
-  const currentRole = currentUser?.role ?? 'member'
-  const canManage = currentRole === 'owner' || currentRole === 'admin'
+  const currentRole = currentUser?.role ?? ROLES.MEMBER
+  const canManage = canManageMembers(currentRole)
 
   const [members, setMembers] = useState<Member[]>([])
   const [invites, setInvites] = useState<Invite[]>([])
@@ -109,10 +110,10 @@ export default function UsersPage() {
   }
 
   const roleStyle: Record<string, string> = {
-    owner: 'bg-violet/10 text-violet',
-    admin: 'bg-teal/10 text-teal',
-    member: 'bg-fog text-ink/60',
-    revoked: 'bg-red-100 text-red-500',
+    [ROLES.OWNER]: 'bg-violet/10 text-violet',
+    [ROLES.ADMIN]: 'bg-teal/10 text-teal',
+    [ROLES.MEMBER]: 'bg-fog text-ink/60',
+    [ROLES.REVOKED]: 'bg-red-100 text-red-500',
   }
 
   const isEmpty = members.length === 0 && invites.length === 0
@@ -171,9 +172,9 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      m.role === 'revoked' ? 'bg-red-100 text-red-500' : 'bg-teal/10 text-teal'
+                      m.role === ROLES.REVOKED ? 'bg-red-100 text-red-500' : 'bg-teal/10 text-teal'
                     }`}>
-                      {m.role === 'revoked' ? 'Revoked' : 'Active'}
+                      {m.role === ROLES.REVOKED ? 'Revoked' : 'Active'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-ink/40">

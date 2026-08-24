@@ -326,7 +326,7 @@ export default function TemplatesPage() {
                     className="w-full bg-white"
                     style={{ height: '520px', border: 'none' }}
                     title="Email preview"
-                    sandbox="allow-same-origin"
+                    sandbox=""
                   />
                 </div>
               )}

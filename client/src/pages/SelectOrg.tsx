@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { apiClient } from '@/shared/services/apiClient'
 import { authService } from '@/shared/services/auth.service'
+import { ROLES } from '@/shared/utils/roles'
 import type { OrgOption } from '@/features/auth/types/auth.types'
 
 interface LocationState {
@@ -12,10 +13,10 @@ interface LocationState {
 }
 
 const roleStyle: Record<string, string> = {
-  owner: 'bg-violet/10 text-violet',
-  admin: 'bg-teal/10 text-teal',
-  member: 'bg-fog border border-ink/10 text-ink/60',
-  revoked: 'bg-coral/10 text-coral',
+  [ROLES.OWNER]: 'bg-violet/10 text-violet',
+  [ROLES.ADMIN]: 'bg-teal/10 text-teal',
+  [ROLES.MEMBER]: 'bg-fog border border-ink/10 text-ink/60',
+  [ROLES.REVOKED]: 'bg-coral/10 text-coral',
 }
 
 export default function SelectOrgPage() {

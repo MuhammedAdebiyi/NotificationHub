@@ -8,9 +8,18 @@ export interface AuthUser {
   role: string
 }
 
+interface TokenPayload {
+  sub: string
+  email: string
+  'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'?: string
+  org_id?: string
+  'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'?: string
+  exp?: number
+}
+
 function decodeToken(token: string): AuthUser | null {
   try {
-    const payload = JSON.parse(atob(token.split('.')[1]))
+    const payload: TokenPayload = JSON.parse(atob(token.split('.')[1]))
     return {
       userId: payload.sub,
       email: payload.email,
@@ -20,6 +29,16 @@ function decodeToken(token: string): AuthUser | null {
     }
   } catch {
     return null
+  }
+}
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload: TokenPayload = JSON.parse(atob(token.split('.')[1]))
+    if (!payload.exp) return false
+    return payload.exp * 1000 < Date.now()
+  } catch {
+    return true
   }
 }
 
@@ -37,12 +56,22 @@ export const authService = {
   },
 
   isAuthenticated(): boolean {
-    return !!this.getToken()
+    const token = this.getToken()
+    if (!token) return false
+    if (isTokenExpired(token)) {
+      this.clearToken()
+      return false
+    }
+    return true
   },
 
   getUser(): AuthUser | null {
     const token = this.getToken()
     if (!token) return null
+    if (isTokenExpired(token)) {
+      this.clearToken()
+      return null
+    }
     return decodeToken(token)
   },
 }

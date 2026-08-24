@@ -8,6 +8,7 @@ import ImportRecipientsPanel from "@/features/campaigns/components/ImportRecipie
 import ImportProgressPanel from "@/features/campaigns/components/ImportProgressPanel"
 import type { CampaignDetail, CampaignStatus } from '../types/campaign.types'
 import type { ImportJob } from '../types/import.types'
+import { sanitizeHtml } from '@/shared/utils/sanitizeHtml'
 
 interface CampaignNotification {
   publicId: string
@@ -347,7 +348,7 @@ export default function CampaignDetailPage() {
           <h2 className="font-display font-bold text-lg mb-3">Message</h2>
           <div
             className="text-sm text-ink/70 leading-relaxed prose max-w-none"
-            dangerouslySetInnerHTML={{ __html: campaign.message }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(campaign.message) }}
           />
         </div>
 
