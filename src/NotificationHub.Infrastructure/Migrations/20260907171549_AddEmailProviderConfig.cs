@@ -17,7 +17,7 @@ namespace NotificationHub.Infrastructure.Migrations
                 type: "character varying(200)",
                 maxLength: 200,
                 nullable: false,
-                defaultValue: "notifications@notificationhub.space",
+                defaultValue: "notifications@mail.notificationhub.space",
                 oldClrType: typeof(string),
                 oldType: "character varying(200)",
                 oldMaxLength: 200,
@@ -71,7 +71,7 @@ namespace NotificationHub.Infrastructure.Migrations
                 oldClrType: typeof(string),
                 oldType: "character varying(200)",
                 oldMaxLength: 200,
-                oldDefaultValue: "notifications@notificationhub.space");
+                oldDefaultValue: "notifications@mail.notificationhub.space");
         }
     }
 }

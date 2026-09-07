@@ -69,7 +69,7 @@ public class EmailProviderController : ControllerBase
         if (string.IsNullOrWhiteSpace(request.ProviderType))
             return BadRequest(new { error = "Provider type is required." });
 
-        var supportedProviders = new[] { "resend" };
+        var supportedProviders = new[] { "resend", "sendbyte", "sendgrid", "brevo", "smtp" };
         if (!supportedProviders.Contains(request.ProviderType.ToLowerInvariant()))
             return BadRequest(new { error = $"Unsupported provider. Supported: {string.Join(", ", supportedProviders)}" });
 

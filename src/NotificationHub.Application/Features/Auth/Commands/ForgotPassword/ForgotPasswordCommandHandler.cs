@@ -49,7 +49,7 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
         var resetLink = $"{_settings.FrontendBaseUrl}/reset-password?token={token.Token}";
 
     await _emailProvider.SendAsync(new EmailMessage(
-        From: "NotificationHub <notifications@notificationhub.space>",
+        From: "NotificationHub <notifications@mail.notificationhub.space>",
         To: user.Email,
         Subject: "Reset your NotificationHub password",
         Html: $"""

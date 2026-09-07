@@ -12,7 +12,7 @@ namespace NotificationHub.Infrastructure.Messaging.Providers;
 
 public class StubNotificationProvider : INotificationProvider
 {
-    private const string CampaignFromEmail = "notifications@notificationhub.space";
+    private const string CampaignFromEmail = "notifications@mail.notificationhub.space";
 
     private readonly IEmailProviderFactory _emailProviderFactory;
     private readonly ILogger<StubNotificationProvider> _logger;

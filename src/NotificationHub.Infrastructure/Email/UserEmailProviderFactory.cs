@@ -45,6 +45,26 @@ public class UserEmailProviderFactory : IEmailProviderFactory
                     new HttpClient(),
                     apiKey,
                     scope.ServiceProvider.GetRequiredService<ILogger<ResendAdapter>>()),
+
+                "sendbyte" => new SendByteAdapter(
+                    new HttpClient(),
+                    apiKey,
+                    scope.ServiceProvider.GetRequiredService<ILogger<SendByteAdapter>>()),
+
+                "sendgrid" => new SendGridAdapter(
+                    new HttpClient(),
+                    apiKey,
+                    scope.ServiceProvider.GetRequiredService<ILogger<SendGridAdapter>>()),
+
+                "brevo" => new BrevoAdapter(
+                    new HttpClient(),
+                    apiKey,
+                    scope.ServiceProvider.GetRequiredService<ILogger<BrevoAdapter>>()),
+
+                "smtp" => new SmtpAdapter(
+                    apiKey,
+                    scope.ServiceProvider.GetRequiredService<ILogger<SmtpAdapter>>()),
+
                 _ => throw new InvalidOperationException($"Unsupported email provider: {config.ProviderType}")
             };
         }

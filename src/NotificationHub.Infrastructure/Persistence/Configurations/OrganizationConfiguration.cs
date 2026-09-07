@@ -13,7 +13,7 @@ public class OrganizationConfiguration : IEntityTypeConfiguration<Organization>
         builder.Property(o => o.Slug).IsRequired().HasMaxLength(200);
         builder.Property(o => o.Plan).IsRequired().HasMaxLength(20);
         builder.Property(o => o.FromName).HasMaxLength(200);
-        builder.Property(o => o.FromEmail).HasMaxLength(200).HasDefaultValue("notifications@notificationhub.space");
+        builder.Property(o => o.FromEmail).HasMaxLength(200).HasDefaultValue("notifications@mail.notificationhub.space");
         builder.HasIndex(o => o.Slug).IsUnique();
     }
 }

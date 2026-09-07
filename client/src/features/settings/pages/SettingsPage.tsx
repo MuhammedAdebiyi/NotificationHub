@@ -33,7 +33,7 @@ interface EmailProviderStatus {
 }
 
 const SENDER_EMAIL_OPTIONS = [
-  'notifications@notificationhub.space',
+  'notifications@mail.notificationhub.space',
 ]
 
 function PermissionWall() {
@@ -139,6 +139,12 @@ export default function SettingsPage() {
   const [providerSaved, setProviderSaved] = useState(false)
   const [showRemoveProvider, setShowRemoveProvider] = useState(false)
 
+  // SMTP-specific fields
+  const [smtpHost, setSmtpHost] = useState('')
+  const [smtpPort, setSmtpPort] = useState('587')
+  const [smtpUsername, setSmtpUsername] = useState('')
+  const [smtpPassword, setSmtpPassword] = useState('')
+
   if (!canManage) return <PermissionWall />
 
   async function load() {
@@ -157,7 +163,7 @@ export default function SettingsPage() {
       const res = await apiClient.get<OrgInfo>('/api/v1/org/info')
       setOrgInfo(res)
       setFromName(res.fromName ?? '')
-      setFromEmail(res.fromEmail ?? 'notifications@notificationhub.space')
+      setFromEmail(res.fromEmail ?? 'notifications@mail.notificationhub.space')
     } catch {
       // fail silently
     } finally {
@@ -252,18 +258,33 @@ export default function SettingsPage() {
   }
 
   async function handleSaveProvider() {
-    if (!providerApiKey.trim()) return
+    let apiKey = providerApiKey.trim()
+
+    // Build SMTP credentials string
+    if (providerType === 'smtp') {
+      if (!smtpHost.trim() || !smtpPort.trim() || !smtpUsername.trim() || !smtpPassword.trim()) {
+        setProviderError('All SMTP fields are required.')
+        return
+      }
+      apiKey = `${smtpHost.trim()}|${smtpPort.trim()}|${smtpUsername.trim()}|${smtpPassword.trim()}`
+    }
+
+    if (!apiKey) return
     setProviderSaving(true)
     setProviderError(null)
     setProviderSaved(false)
     try {
       await apiClient.post('/api/v1/org/email-provider', {
         providerType,
-        apiKey: providerApiKey.trim(),
+        apiKey,
       })
       setProviderSaved(true)
       setShowProviderForm(false)
       setProviderApiKey('')
+      setSmtpHost('')
+      setSmtpPort('587')
+      setSmtpUsername('')
+      setSmtpPassword('')
       await loadEmailProvider()
     } catch (err) {
       setProviderError(err instanceof Error ? err.message : 'Failed to save provider.')
@@ -362,7 +383,7 @@ export default function SettingsPage() {
             <h2 className="font-display font-bold text-lg">Email Provider</h2>
           </div>
           <p className="text-xs text-ink/40 mb-6">
-            Connect your own Resend account to send campaigns from your domain.
+            Connect your own email provider to send campaigns from your domain.
             Without this, emails send from the platform default.
           </p>
 
@@ -410,25 +431,77 @@ export default function SettingsPage() {
                 <label className="block text-sm font-medium mb-1">Provider</label>
                 <select
                   value={providerType}
-                  onChange={e => setProviderType(e.target.value)}
+                  onChange={e => { setProviderType(e.target.value); setProviderApiKey(''); setProviderError(null) }}
                   className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet"
                 >
                   <option value="resend">Resend</option>
+                  <option value="sendgrid">SendGrid</option>
+                  <option value="brevo">Brevo</option>
+                  <option value="smtp">SMTP (any provider)</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">API Key</label>
-                <input
-                  type="password"
-                  placeholder="re_..."
-                  value={providerApiKey}
-                  onChange={e => setProviderApiKey(e.target.value)}
-                  className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet"
-                />
-                <p className="text-xs text-ink/40 mt-1">
-                  Your key is encrypted and stored securely. It's only used to send emails on your behalf.
-                </p>
-              </div>
+
+              {providerType === 'smtp' ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">SMTP Host</label>
+                      <input
+                        type="text"
+                        placeholder="smtp.sendbyte.africa"
+                        value={smtpHost}
+                        onChange={e => setSmtpHost(e.target.value)}
+                        className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Port</label>
+                      <input
+                        type="text"
+                        placeholder="587"
+                        value={smtpPort}
+                        onChange={e => setSmtpPort(e.target.value)}
+                        className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Username</label>
+                    <input
+                      type="text"
+                      placeholder="your-smtp-username"
+                      value={smtpUsername}
+                      onChange={e => setSmtpUsername(e.target.value)}
+                      className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Password</label>
+                    <input
+                      type="password"
+                      placeholder="your-smtp-password"
+                      value={smtpPassword}
+                      onChange={e => setSmtpPassword(e.target.value)}
+                      className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium mb-1">API Key</label>
+                  <input
+                    type="password"
+                    placeholder={providerType === 'resend' ? 're_...' : providerType === 'sendgrid' ? 'SG...' : 'xkeysib-...'}
+                    value={providerApiKey}
+                    onChange={e => setProviderApiKey(e.target.value)}
+                    className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet"
+                  />
+                </div>
+              )}
+
+              <p className="text-xs text-ink/40">
+                Your credentials are encrypted and stored securely. Only used to send emails on your behalf.
+              </p>
               <div className="flex gap-3">
                 <button
                   onClick={handleSaveProvider}
@@ -450,14 +523,14 @@ export default function SettingsPage() {
               <div className="bg-fog/50 border border-ink/10 rounded-lg p-4 mb-4">
                 <p className="text-sm text-ink/60">
                   No email provider connected. Emails send from the platform default
-                  (<span className="font-mono text-xs">notifications@notificationhub.space</span>).
+                  (<span className="font-mono text-xs">notifications@mail.notificationhub.space</span>).
                 </p>
               </div>
               <button
                 onClick={() => setShowProviderForm(true)}
                 className="px-4 py-2 bg-ink text-white rounded-lg text-sm font-medium hover:bg-violet transition"
               >
-                + Connect Resend
+                + Connect Provider
               </button>
             </div>
           )}
@@ -564,7 +637,7 @@ export default function SettingsPage() {
                 </div>
                 <p className="text-xs text-ink/40 mb-2">
                   This is the name recipients see when your campaigns land in their inbox —
-                  e.g. "{fromName || 'NotificationHub'} &lt;notifications@notificationhub.space&gt;".
+                  e.g. "{fromName || 'NotificationHub'} &lt;notifications@mail.notificationhub.space&gt;".
                 </p>
                 <div className="flex gap-2">
                   <input

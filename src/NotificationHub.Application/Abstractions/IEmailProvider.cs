@@ -10,5 +10,6 @@ public record EmailMessage(
     string To,
     string Subject,
     string Html,
-    string? Text = null
+    string? Text = null,
+    string? ProviderApiKey = null
 );

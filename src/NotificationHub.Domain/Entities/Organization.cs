@@ -8,7 +8,7 @@ public class Organization : AuditableEntity
     public string Slug { get; set; } = string.Empty;
     public string Plan { get; set; } = "free";
     public string FromName { get; set; } = string.Empty;
-    public string FromEmail { get; set; } = "notifications@notificationhub.space";
+    public string FromEmail { get; set; } = "notifications@mail.notificationhub.space";
 
     public ICollection<OrganizationMember> Members { get; set; } = new List<OrganizationMember>();
     public ICollection<ApiKey> ApiKeys { get; set; } = new List<ApiKey>();

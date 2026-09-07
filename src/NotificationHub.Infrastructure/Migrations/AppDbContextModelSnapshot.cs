@@ -583,7 +583,7 @@ namespace NotificationHub.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
-                        .HasDefaultValue("notifications@notificationhub.space");
+                        .HasDefaultValue("notifications@mail.notificationhub.space");
 
                     b.Property<string>("FromName")
                         .IsRequired()

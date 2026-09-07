@@ -52,7 +52,7 @@ public class SendVerificationEmailCommandHandler
         var link = $"{_settings.FrontendBaseUrl}/verify-email?token={token.Token}";
 
         await _emailProvider.SendAsync(new EmailMessage(
-            From: "NotificationHub <notifications@notificationhub.space>",
+            From: "NotificationHub <notifications@mail.notificationhub.space>",
             To: user.Email,
             Subject: "Verify your email",
             Html: $"<p>Click to verify your account:</p><p><a href=\"{link}\">{link}</a></p>",
