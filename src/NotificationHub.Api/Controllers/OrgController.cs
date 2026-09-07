@@ -86,6 +86,7 @@ public class OrgController : ControllerBase
             plan = org.Plan,
             fromName = org.FromName,
             fromEmail = org.FromEmail,
+            replyToEmail = org.ReplyToEmail,
             createdAt = org.CreatedAt,
         });
     }
@@ -123,9 +124,14 @@ public class OrgController : ControllerBase
         if (!string.IsNullOrWhiteSpace(request.FromEmail))
             org.FromEmail = request.FromEmail.Trim();
 
+        if (request.ReplyToEmail is not null)
+            org.ReplyToEmail = string.IsNullOrWhiteSpace(request.ReplyToEmail)
+                ? null
+                : request.ReplyToEmail.Trim();
+
         await _orgRepository.SaveChangesAsync(cancellationToken);
 
-        return Ok(new { updated = true, fromName = org.FromName, fromEmail = org.FromEmail });
+        return Ok(new { updated = true, fromName = org.FromName, fromEmail = org.FromEmail, replyToEmail = org.ReplyToEmail });
     }
 
     [HttpGet("members")]
@@ -575,7 +581,7 @@ public class OrgController : ControllerBase
     }
 }
 
-public record UpdateOrgInfoRequest(string FromName, string? FromEmail = null);
+public record UpdateOrgInfoRequest(string FromName, string? FromEmail = null, string? ReplyToEmail = null);
 public record SendInviteRequest(string Email, string? Role);
 public record UpdateRoleRequest(string Role);
 public record AcceptInviteRequest(string Token, string? FullName, string? Password);

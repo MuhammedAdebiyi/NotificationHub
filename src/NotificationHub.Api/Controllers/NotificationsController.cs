@@ -65,13 +65,17 @@ public class NotificationsController : ControllerBase
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
+        [FromQuery] DateTime? dateFrom = null,
+        [FromQuery] DateTime? dateTo = null,
         CancellationToken cancellationToken = default)
     {
         if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
 
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
         var query = new GetNotificationsQuery(
-            _currentOrg.OrganizationId.Value, page, pageSize);
+            _currentOrg.OrganizationId.Value, page, pageSize, dateFrom, dateTo);
 
         var result = await _mediator.Send(query, cancellationToken);
 

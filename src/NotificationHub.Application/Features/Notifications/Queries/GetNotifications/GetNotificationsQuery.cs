@@ -6,7 +6,9 @@ namespace NotificationHub.Application.Features.Notifications.Queries.GetNotifica
 public record GetNotificationsQuery(
     Guid OrganizationId,
     int Page = 1,
-    int PageSize = 20
+    int PageSize = 20,
+    DateTime? DateFrom = null,
+    DateTime? DateTo = null
 ) : IRequest<Result<GetNotificationsResult>>;
 
 public record GetNotificationsResult(
@@ -23,5 +25,6 @@ public record NotificationListItemDto(
     string Channel,
     string Status,
     int RetryCount,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    DateTime? OpenedAt
 );

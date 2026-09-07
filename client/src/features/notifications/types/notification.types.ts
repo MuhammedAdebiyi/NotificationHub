@@ -9,6 +9,7 @@ export interface Notification {
   status: NotificationStatus
   retryCount: number
   createdAt: string
+  openedAt: string | null
 }
 
 export interface NotificationDetail extends Notification {

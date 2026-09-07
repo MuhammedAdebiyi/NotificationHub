@@ -21,6 +21,7 @@ interface OrgInfo {
   plan: string
   fromName: string
   fromEmail: string
+  replyToEmail: string | null
   createdAt: string
 }
 
@@ -136,6 +137,11 @@ export default function SettingsPage() {
   const [fromEmailSaved, setFromEmailSaved] = useState(false)
   const [fromEmailError, setFromEmailError] = useState<string | null>(null)
 
+  const [replyToEmail, setReplyToEmail] = useState('')
+  const [savingReplyTo, setSavingReplyTo] = useState(false)
+  const [replyToSaved, setReplyToSaved] = useState(false)
+  const [replyToError, setReplyToError] = useState<string | null>(null)
+
   // Email provider state
   const [emailProvider, setEmailProvider] = useState<EmailProviderStatus | null>(null)
   const [emailProviderLoading, setEmailProviderLoading] = useState(true)
@@ -177,6 +183,7 @@ export default function SettingsPage() {
       setOrgInfo(res)
       setFromName(res.fromName ?? '')
       setFromEmail(res.fromEmail ?? 'notifications@mail.notificationhub.space')
+      setReplyToEmail(res.replyToEmail ?? '')
     } catch {
       // fail silently
     } finally {
@@ -289,6 +296,25 @@ export default function SettingsPage() {
       setFromEmailError(err instanceof Error ? err.message : 'Failed to save sender email.')
     } finally {
       setSavingFromEmail(false)
+    }
+  }
+
+  async function handleSaveReplyTo() {
+    setSavingReplyTo(true)
+    setReplyToSaved(false)
+    setReplyToError(null)
+    try {
+      await apiClient.put<{ updated: boolean; replyToEmail: string | null }>('/api/v1/org/info', {
+        fromName: fromName.trim() || orgInfo?.fromName || '',
+        fromEmail: fromEmail.trim() || orgInfo?.fromEmail || '',
+        replyToEmail: replyToEmail.trim() || null,
+      })
+      setReplyToSaved(true)
+      setOrgInfo(prev => prev ? { ...prev, replyToEmail: replyToEmail.trim() || null } : prev)
+    } catch (err) {
+      setReplyToError(err instanceof Error ? err.message : 'Failed to save reply-to email.')
+    } finally {
+      setSavingReplyTo(false)
     }
   }
 
@@ -777,6 +803,38 @@ export default function SettingsPage() {
                   <p className="text-xs text-coral mt-1">{fromEmailError}</p>
                 )}
                 {fromEmailSaved && !fromEmailError && (
+                  <p className="text-xs text-teal mt-1">✓ Saved</p>
+                )}
+              </div>
+
+              <div className="py-3">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-ink/50">Reply-to email</span>
+                </div>
+                <p className="text-xs text-ink/40 mb-2">
+                  Where replies go when recipients hit "Reply". Leave empty to use the sender email.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    className="flex-1 border border-ink/20 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet"
+                    placeholder="e.g. support@coursevault.com"
+                    value={replyToEmail}
+                    onChange={e => { setReplyToEmail(e.target.value); setReplyToSaved(false); setReplyToError(null) }}
+                    maxLength={200}
+                  />
+                  <button
+                    onClick={handleSaveReplyTo}
+                    disabled={savingReplyTo || replyToEmail.trim() === (orgInfo?.replyToEmail ?? '')}
+                    className="text-xs px-3 py-1.5 bg-ink text-white rounded-lg hover:bg-violet transition disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {savingReplyTo ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+                {replyToError && (
+                  <p className="text-xs text-coral mt-1">{replyToError}</p>
+                )}
+                {replyToSaved && !replyToError && (
                   <p className="text-xs text-teal mt-1">✓ Saved</p>
                 )}
               </div>

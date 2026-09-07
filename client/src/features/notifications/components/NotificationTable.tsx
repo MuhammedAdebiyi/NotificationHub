@@ -23,6 +23,7 @@ export default function NotificationTable({ notifications }: { notifications: No
             <th className="pb-3 pr-4 font-medium">Type</th>
             <th className="pb-3 pr-4 font-medium">Channel</th>
             <th className="pb-3 pr-4 font-medium">Status</th>
+            <th className="pb-3 pr-4 font-medium">Read</th>
             <th className="pb-3 font-medium">Created</th>
           </tr>
         </thead>
@@ -41,6 +42,15 @@ export default function NotificationTable({ notifications }: { notifications: No
               <td className="py-3 pr-4 text-ink/60">{n.channel}</td>
               <td className="py-3 pr-4">
                 <NotificationStatusBadge status={n.status} />
+              </td>
+              <td className="py-3 pr-4">
+                {n.openedAt ? (
+                  <span className="text-xs text-teal" title={`Opened ${new Date(n.openedAt).toLocaleString()}`}>
+                    ✓ {new Date(n.openedAt).toLocaleDateString()}
+                  </span>
+                ) : (
+                  <span className="text-xs text-ink/30">—</span>
+                )}
               </td>
               <td className="py-3 text-ink/40 text-xs">
                 {new Date(n.createdAt).toLocaleString()}

@@ -95,12 +95,13 @@ public class StubNotificationProvider : INotificationProvider
 
         var to = notification.RecipientEmail;
         var from = await ResolveFromAddressAsync(notification.OrganizationId, cancellationToken);
+        var trackingPixel = $"<img src=\"https://notificationhub.space/api/v1/track/open/{notification.Id}\" width=\"1\" height=\"1\" style=\"display:none\" alt=\"\" />";
 
         var message = new EmailMessage(
             From: from,
             To: to,
             Subject: payload.Subject,
-            Html: $"<p>{payload.Body}</p>",
+            Html: $"<p>{payload.Body}</p>{trackingPixel}",
             Text: payload.Body
         );
 

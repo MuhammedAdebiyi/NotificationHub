@@ -54,9 +54,24 @@ public class NotificationRepository : INotificationRepository
         Guid organizationId, int page, int pageSize,
         CancellationToken cancellationToken = default)
     {
+        return await GetPagedAsync(organizationId, page, pageSize, null, null, cancellationToken);
+    }
+
+    public async Task<(IReadOnlyList<Notification> Items, int TotalCount)> GetPagedAsync(
+        Guid organizationId, int page, int pageSize,
+        DateTime? dateFrom, DateTime? dateTo,
+        CancellationToken cancellationToken = default)
+    {
         var query = _context.Notifications
-            .Where(n => n.OrganizationId == organizationId)
-            .OrderByDescending(n => n.CreatedAt);
+            .Where(n => n.OrganizationId == organizationId);
+
+        if (dateFrom.HasValue)
+            query = query.Where(n => n.CreatedAt >= dateFrom.Value);
+
+        if (dateTo.HasValue)
+            query = query.Where(n => n.CreatedAt <= dateTo.Value.AddDays(1));
+
+        query = query.OrderByDescending(n => n.CreatedAt);
 
         var totalCount = await query.CountAsync(cancellationToken);
         var items = await query

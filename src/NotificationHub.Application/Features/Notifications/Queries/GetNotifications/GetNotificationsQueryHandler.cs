@@ -19,7 +19,8 @@ public class GetNotificationsQueryHandler
         CancellationToken cancellationToken)
     {
         var (items, totalCount) = await _repository.GetPagedAsync(
-            request.OrganizationId, request.Page, request.PageSize, cancellationToken);
+            request.OrganizationId, request.Page, request.PageSize,
+            request.DateFrom, request.DateTo, cancellationToken);
 
         var dtos = items.Select(n => new NotificationListItemDto(
             n.PublicId,
@@ -28,7 +29,8 @@ public class GetNotificationsQueryHandler
             n.Channel.ToString(),
             n.Status.ToString(),
             n.RetryCount,
-            n.CreatedAt
+            n.CreatedAt,
+            n.OpenedAt
         )).ToList();
 
         return Result<GetNotificationsResult>.Success(new GetNotificationsResult(

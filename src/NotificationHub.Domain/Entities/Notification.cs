@@ -52,6 +52,9 @@ public class Notification : BaseEntity
     // Failure information
     public string? LastError { get; private set; }
 
+    // Read tracking
+    public DateTime? OpenedAt { get; set; }
+
     public DateTime? NextRetryAt { get; private set; }
 
     // Navigation
