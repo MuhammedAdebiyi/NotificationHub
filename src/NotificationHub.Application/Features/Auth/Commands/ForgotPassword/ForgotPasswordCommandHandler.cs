@@ -1,4 +1,5 @@
 using MediatR;
+using Microsoft.Extensions.Options;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Domain.Entities;
 using NotificationHub.Shared.Abstractions;
@@ -10,15 +11,18 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
     private readonly IUserRepository _userRepository;
     private readonly IEmailProvider _emailProvider;
     private readonly IVerificationTokenRepository _tokenRepository;
+    private readonly VerificationSettings _settings;
 
     public ForgotPasswordCommandHandler(
         IUserRepository userRepository,
         IEmailProvider emailProvider,
-        IVerificationTokenRepository tokenRepository)
+        IVerificationTokenRepository tokenRepository,
+        IOptions<VerificationSettings> settings)
     {
         _userRepository = userRepository;
         _emailProvider = emailProvider;
         _tokenRepository = tokenRepository;
+        _settings = settings.Value;
     }
 
     public async Task<Result<bool>> Handle(
@@ -42,10 +46,10 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
         await _tokenRepository.AddAsync(token, cancellationToken);
         await _tokenRepository.SaveChangesAsync(cancellationToken);
 
-        var resetLink = $"http://localhost:5173/reset-password?token={token.Token}";
+        var resetLink = $"{_settings.FrontendBaseUrl}/reset-password?token={token.Token}";
 
     await _emailProvider.SendAsync(new EmailMessage(
-        From: "noreply@coursevaultai.app",
+        From: "NotificationHub <notifications@notificationhub.space>",
         To: user.Email,
         Subject: "Reset your NotificationHub password",
         Html: $"""

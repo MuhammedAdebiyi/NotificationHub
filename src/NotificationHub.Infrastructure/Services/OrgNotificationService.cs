@@ -33,7 +33,7 @@ public class OrgNotificationService : IOrgNotificationService
             try
             {
                 await _emailProvider.SendAsync(new EmailMessage(
-                    From: "NotificationHub <noreply@coursevaultai.app>",
+                    From: "NotificationHub <notifications@notificationhub.space>",
                     To: member.User!.Email,
                     Subject: subject,
                     Html: html,

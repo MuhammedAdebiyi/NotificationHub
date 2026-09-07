@@ -417,7 +417,7 @@ public class OrgController : ControllerBase
         var link = $"{frontendUrl}/accept-invite?token={invite.Token}";
 
         await _emailProvider.SendAsync(new EmailMessage(
-            From: "NotificationHub <noreply@coursevaultai.app>",
+            From: "NotificationHub <notifications@notificationhub.space>",
             To: invite.Email,
             Subject: $"You've been invited to join {orgName} on NotificationHub",
             Html: $"""

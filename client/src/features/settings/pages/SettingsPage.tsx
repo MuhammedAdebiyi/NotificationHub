@@ -24,10 +24,16 @@ interface OrgInfo {
   createdAt: string
 }
 
+interface EmailProviderStatus {
+  configured: boolean
+  providerType?: string
+  senderEmail?: string
+  isActive?: boolean
+  createdAt?: string
+}
+
 const SENDER_EMAIL_OPTIONS = [
-  'campaigns@coursevaultai.app',
-  'notifications@coursevaultai.app',
-  'hello@coursevaultai.app',
+  'notifications@notificationhub.space',
 ]
 
 function PermissionWall() {
@@ -43,7 +49,7 @@ function PermissionWall() {
           You don't have permission
         </h2>
         <p className="text-sm text-ink/50 max-w-sm mb-8">
-          API key management is restricted to owners and admins.
+          Settings management is restricted to owners and admins.
           Contact your organization owner if you need access.
         </p>
         <button
@@ -122,7 +128,17 @@ export default function SettingsPage() {
   const [fromEmailSaved, setFromEmailSaved] = useState(false)
   const [fromEmailError, setFromEmailError] = useState<string | null>(null)
 
-  // Members see permission wall immediately
+  // Email provider state
+  const [emailProvider, setEmailProvider] = useState<EmailProviderStatus | null>(null)
+  const [emailProviderLoading, setEmailProviderLoading] = useState(true)
+  const [showProviderForm, setShowProviderForm] = useState(false)
+  const [providerApiKey, setProviderApiKey] = useState('')
+  const [providerType, setProviderType] = useState('resend')
+  const [providerSaving, setProviderSaving] = useState(false)
+  const [providerError, setProviderError] = useState<string | null>(null)
+  const [providerSaved, setProviderSaved] = useState(false)
+  const [showRemoveProvider, setShowRemoveProvider] = useState(false)
+
   if (!canManage) return <PermissionWall />
 
   async function load() {
@@ -141,7 +157,7 @@ export default function SettingsPage() {
       const res = await apiClient.get<OrgInfo>('/api/v1/org/info')
       setOrgInfo(res)
       setFromName(res.fromName ?? '')
-      setFromEmail(res.fromEmail ?? 'campaigns@coursevaultai.app')
+      setFromEmail(res.fromEmail ?? 'notifications@notificationhub.space')
     } catch {
       // fail silently
     } finally {
@@ -149,9 +165,21 @@ export default function SettingsPage() {
     }
   }
 
+  async function loadEmailProvider() {
+    try {
+      const res = await apiClient.get<EmailProviderStatus>('/api/v1/org/email-provider')
+      setEmailProvider(res)
+    } catch {
+      // fail silently
+    } finally {
+      setEmailProviderLoading(false)
+    }
+  }
+
   useEffect(() => {
     load()
     loadOrgInfo()
+    loadEmailProvider()
   }, [])
 
   async function handleCreate() {
@@ -223,6 +251,37 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveProvider() {
+    if (!providerApiKey.trim()) return
+    setProviderSaving(true)
+    setProviderError(null)
+    setProviderSaved(false)
+    try {
+      await apiClient.post('/api/v1/org/email-provider', {
+        providerType,
+        apiKey: providerApiKey.trim(),
+      })
+      setProviderSaved(true)
+      setShowProviderForm(false)
+      setProviderApiKey('')
+      await loadEmailProvider()
+    } catch (err) {
+      setProviderError(err instanceof Error ? err.message : 'Failed to save provider.')
+    } finally {
+      setProviderSaving(false)
+    }
+  }
+
+  async function handleRemoveProvider() {
+    try {
+      await apiClient.delete('/api/v1/org/email-provider')
+      setEmailProvider(null)
+      setShowRemoveProvider(false)
+    } catch {
+      // fail silently
+    }
+  }
+
   return (
     <AppLayout>
       {revokeTarget && (
@@ -231,6 +290,35 @@ export default function SettingsPage() {
           onConfirm={confirmRevoke}
           onCancel={() => setRevokeTarget(null)}
         />
+      )}
+
+      {showRemoveProvider && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={() => setShowRemoveProvider(false)} />
+          <div className="relative bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
+            <div className="w-12 h-12 bg-coral/10 rounded-full flex items-center justify-center mb-4">
+              <span className="text-coral text-xl">✕</span>
+            </div>
+            <h3 className="font-display font-bold text-lg mb-1">Remove email provider?</h3>
+            <p className="text-sm text-ink/60 mb-6">
+              Your campaigns will revert to sending from the platform default email.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleRemoveProvider}
+                className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg text-sm font-medium hover:bg-coral/80 transition"
+              >
+                Remove
+              </button>
+              <button
+                onClick={() => setShowRemoveProvider(false)}
+                className="flex-1 px-4 py-2.5 border border-ink/20 rounded-lg text-sm font-medium hover:bg-fog transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="mb-8">
@@ -267,6 +355,113 @@ export default function SettingsPage() {
             </div>
           </div>
         )}
+
+        {/* Email Provider section */}
+        <div className="bg-white border border-ink/10 rounded-xl p-6">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-display font-bold text-lg">Email Provider</h2>
+          </div>
+          <p className="text-xs text-ink/40 mb-6">
+            Connect your own Resend account to send campaigns from your domain.
+            Without this, emails send from the platform default.
+          </p>
+
+          {emailProviderLoading ? (
+            <p className="text-sm text-ink/40 text-center py-6">Loading...</p>
+          ) : emailProvider?.configured && !showProviderForm ? (
+            <div className="space-y-4">
+              <div className="bg-teal/5 border border-teal/20 rounded-lg p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="w-2 h-2 rounded-full bg-teal" />
+                      <span className="text-sm font-medium capitalize">{emailProvider.providerType} connected</span>
+                    </div>
+                    <p className="text-xs text-ink/40">
+                      Campaigns will send through your {emailProvider.providerType} account.
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowProviderForm(true)}
+                      className="text-xs px-3 py-1.5 border border-ink/20 rounded-lg hover:bg-fog transition"
+                    >
+                      Update key
+                    </button>
+                    <button
+                      onClick={() => setShowRemoveProvider(true)}
+                      className="text-xs px-3 py-1.5 border border-coral/30 text-coral rounded-lg hover:bg-red-50 transition"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : showProviderForm ? (
+            <div className="space-y-4">
+              {providerError && (
+                <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-xl">{providerError}</div>
+              )}
+              {providerSaved && (
+                <div className="bg-teal/10 text-teal text-sm px-4 py-3 rounded-xl">✓ Provider connected</div>
+              )}
+              <div>
+                <label className="block text-sm font-medium mb-1">Provider</label>
+                <select
+                  value={providerType}
+                  onChange={e => setProviderType(e.target.value)}
+                  className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet"
+                >
+                  <option value="resend">Resend</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">API Key</label>
+                <input
+                  type="password"
+                  placeholder="re_..."
+                  value={providerApiKey}
+                  onChange={e => setProviderApiKey(e.target.value)}
+                  className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet"
+                />
+                <p className="text-xs text-ink/40 mt-1">
+                  Your key is encrypted and stored securely. It's only used to send emails on your behalf.
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={handleSaveProvider}
+                  disabled={providerSaving || !providerApiKey.trim()}
+                  className="px-4 py-2 bg-ink text-white rounded-lg text-sm font-medium hover:bg-violet transition disabled:opacity-50"
+                >
+                  {providerSaving ? 'Connecting...' : 'Connect'}
+                </button>
+                <button
+                  onClick={() => { setShowProviderForm(false); setProviderError(null); setProviderSaved(false); setProviderApiKey('') }}
+                  className="px-4 py-2 border border-ink/20 rounded-lg text-sm font-medium hover:bg-fog transition"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div className="bg-fog/50 border border-ink/10 rounded-lg p-4 mb-4">
+                <p className="text-sm text-ink/60">
+                  No email provider connected. Emails send from the platform default
+                  (<span className="font-mono text-xs">notifications@notificationhub.space</span>).
+                </p>
+              </div>
+              <button
+                onClick={() => setShowProviderForm(true)}
+                className="px-4 py-2 bg-ink text-white rounded-lg text-sm font-medium hover:bg-violet transition"
+              >
+                + Connect Resend
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* API Keys section */}
         <div className="bg-white border border-ink/10 rounded-xl p-6">
@@ -365,16 +560,16 @@ export default function SettingsPage() {
               <div className="py-3">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-ink/50">Sender name</span>
-                  <span className="text-xs text-ink/30 font-mono">@coursevaultai.app</span>
+                  <span className="text-xs text-ink/30 font-mono">@notificationhub.space</span>
                 </div>
                 <p className="text-xs text-ink/40 mb-2">
                   This is the name recipients see when your campaigns land in their inbox —
-                  e.g. "{fromName || 'CourseVault'} &lt;campaigns@coursevaultai.app&gt;".
+                  e.g. "{fromName || 'NotificationHub'} &lt;notifications@notificationhub.space&gt;".
                 </p>
                 <div className="flex gap-2">
                   <input
                     className="flex-1 border border-ink/20 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-violet"
-                    placeholder="e.g. CourseVault"
+                    placeholder="e.g. NotificationHub"
                     value={fromName}
                     onChange={e => { setFromName(e.target.value); setFromNameSaved(false); setFromNameError(null) }}
                     maxLength={100}
@@ -398,7 +593,7 @@ export default function SettingsPage() {
               <div className="py-3">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-ink/50">Sender email</span>
-                  <span className="text-xs text-ink/30 font-mono">@coursevaultai.app</span>
+                  <span className="text-xs text-ink/30 font-mono">@notificationhub.space</span>
                 </div>
                 <p className="text-xs text-ink/40 mb-2">
                   The address your campaigns are sent from. Pick the one recipients should see

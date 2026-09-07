@@ -6,6 +6,7 @@ using NotificationHub.Application.Abstractions;
 using NotificationHub.Infrastructure.Auth;
 using NotificationHub.Infrastructure.Common;
 using NotificationHub.Infrastructure.Email.Providers;
+using NotificationHub.Infrastructure.Email;
 using NotificationHub.Infrastructure.Messaging.Providers;
 using NotificationHub.Infrastructure.Messaging.Redis;
 using NotificationHub.Infrastructure.Repositories;
@@ -81,6 +82,8 @@ public static class InfrastructureServiceExtensions
         
         // Email provider
         services.AddHttpClient<IEmailProvider, ResendEmailProvider>();
+        services.AddScoped<IEmailProviderConfigRepository, EmailProviderConfigRepository>();
+        services.AddScoped<IEmailProviderFactory, UserEmailProviderFactory>();
 
         // Notification provider
         services.AddScoped<INotificationProvider, StubNotificationProvider>();

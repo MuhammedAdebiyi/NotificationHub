@@ -12,18 +12,18 @@ namespace NotificationHub.Infrastructure.Messaging.Providers;
 
 public class StubNotificationProvider : INotificationProvider
 {
-    private const string CampaignFromEmail = "campaigns@coursevaultai.app";
+    private const string CampaignFromEmail = "notifications@notificationhub.space";
 
-    private readonly IEmailProvider _emailProvider;
+    private readonly IEmailProviderFactory _emailProviderFactory;
     private readonly ILogger<StubNotificationProvider> _logger;
     private readonly AppDbContext _context;
 
     public StubNotificationProvider(
-        IEmailProvider emailProvider,
+        IEmailProviderFactory emailProviderFactory,
         ILogger<StubNotificationProvider> logger,
         AppDbContext context)
     {
-        _emailProvider = emailProvider;
+        _emailProviderFactory = emailProviderFactory;
         _logger = logger;
         _context = context;
     }
@@ -104,7 +104,8 @@ public class StubNotificationProvider : INotificationProvider
             Text: payload.Body
         );
 
-        var emailId = await _emailProvider.SendAsync(message, cancellationToken);
+        var emailProvider = await _emailProviderFactory.GetProviderAsync(notification.OrganizationId, cancellationToken);
+        var emailId = await emailProvider.SendAsync(message, cancellationToken);
 
         _logger.LogInformation(
             "Email sent via Resend for notification {Id} to {To} from {From}",
