@@ -6,11 +6,12 @@ using NotificationHub.Application.Abstractions;
 
 namespace NotificationHub.Infrastructure.Email.Providers;
 
-public class ResendAdapter : IEmailProvider
+public class ResendAdapter : IEmailProvider, IEmailProviderDomains
 {
     private readonly HttpClient _http;
     private readonly ILogger<ResendAdapter> _logger;
     private const string Endpoint = "https://api.resend.com/emails";
+    private const string DomainsEndpoint = "https://api.resend.com/domains";
 
     public ResendAdapter(HttpClient http, string apiKey, ILogger<ResendAdapter> logger)
     {
@@ -56,5 +57,38 @@ public class ResendAdapter : IEmailProvider
 
         _logger.LogInformation("Resend accepted email id={EmailId} to={To}", emailId, message.To);
         return emailId;
+    }
+
+    public async Task<IReadOnlyList<ProviderDomain>> ListDomainsAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await _http.GetAsync(DomainsEndpoint, cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            _logger.LogError("Resend domains API error {Status}: {Body}", (int)response.StatusCode, responseBody);
+            return Array.Empty<ProviderDomain>();
+        }
+
+        using var doc = JsonDocument.Parse(responseBody);
+        var data = doc.RootElement.GetProperty("data");
+        var domains = new List<ProviderDomain>();
+
+        foreach (var item in data.EnumerateArray())
+        {
+            domains.Add(new ProviderDomain(
+                Id: item.GetProperty("id").GetString() ?? string.Empty,
+                Domain: item.GetProperty("name").GetString() ?? string.Empty,
+                Status: item.GetProperty("status").GetString() ?? "unknown",
+                VerifiedAt: item.TryGetProperty("verified_at", out var vt) && vt.ValueKind != JsonValueKind.Null
+                    ? DateTime.Parse(vt.GetString()!)
+                    : null,
+                DeliverabilityReady: item.TryGetProperty("capabilities", out var caps)
+                    && caps.TryGetProperty("sending", out var sending)
+                    && sending.GetString() == "enabled"
+            ));
+        }
+
+        return domains;
     }
 }

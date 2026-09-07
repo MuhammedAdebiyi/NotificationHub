@@ -32,6 +32,14 @@ interface EmailProviderStatus {
   createdAt?: string
 }
 
+interface ProviderDomain {
+  id: string
+  domain: string
+  status: string
+  verifiedAt: string | null
+  deliverabilityReady: boolean
+}
+
 const SENDER_EMAIL_OPTIONS = [
   'notifications@mail.notificationhub.space',
 ]
@@ -145,6 +153,11 @@ export default function SettingsPage() {
   const [smtpUsername, setSmtpUsername] = useState('')
   const [smtpPassword, setSmtpPassword] = useState('')
 
+  // Verified domains
+  const [domains, setDomains] = useState<ProviderDomain[]>([])
+  const [domainsLoading, setDomainsLoading] = useState(false)
+  const [domainsError, setDomainsError] = useState<string | null>(null)
+
   if (!canManage) return <PermissionWall />
 
   async function load() {
@@ -175,10 +188,32 @@ export default function SettingsPage() {
     try {
       const res = await apiClient.get<EmailProviderStatus>('/api/v1/org/email-provider')
       setEmailProvider(res)
+      if (res.configured) {
+        loadDomains()
+      }
     } catch {
       // fail silently
     } finally {
       setEmailProviderLoading(false)
+    }
+  }
+
+  async function loadDomains() {
+    setDomainsLoading(true)
+    setDomainsError(null)
+    try {
+      const res = await apiClient.get<{ providerType: string; domains: ProviderDomain[]; error?: string }>(
+        '/api/v1/org/email-provider/domains'
+      )
+      if (res.error) {
+        setDomainsError(res.error)
+      } else {
+        setDomains(res.domains)
+      }
+    } catch (err) {
+      setDomainsError(err instanceof Error ? err.message : 'Failed to load domains')
+    } finally {
+      setDomainsLoading(false)
     }
   }
 
@@ -418,6 +453,51 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Verified Domains */}
+              {domainsLoading ? (
+                <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
+                  <p className="text-sm text-ink/40 text-center">Loading domains...</p>
+                </div>
+              ) : domainsError ? (
+                <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
+                  <p className="text-sm text-ink/40">{domainsError}</p>
+                </div>
+              ) : domains.length > 0 ? (
+                <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
+                  <p className="text-xs font-medium text-ink/50 mb-3">Verified Domains</p>
+                  <div className="space-y-2">
+                    {domains.map(d => (
+                      <div key={d.id} className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-ink/5">
+                        <div className="flex items-center gap-2">
+                          <span className={`w-2 h-2 rounded-full ${d.status === 'verified' ? 'bg-teal' : 'bg-amber'}`} />
+                          <span className="text-sm font-mono">{d.domain}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            d.status === 'verified'
+                              ? 'bg-teal/10 text-teal'
+                              : 'bg-amber/10 text-amber'
+                          }`}>
+                            {d.status === 'verified' ? 'Active' : 'Pending'}
+                          </span>
+                          {d.deliverabilityReady && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-violet/10 text-violet">
+                              Ready
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
+                  <p className="text-sm text-ink/40">
+                    No domains verified yet. Add and verify a domain in your {emailProvider.providerType} dashboard.
+                  </p>
+                </div>
+              )}
             </div>
           ) : showProviderForm ? (
             <div className="space-y-4">

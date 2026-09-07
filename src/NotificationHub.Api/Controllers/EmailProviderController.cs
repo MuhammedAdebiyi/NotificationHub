@@ -14,15 +14,18 @@ namespace NotificationHub.Api.Controllers;
 public class EmailProviderController : ControllerBase
 {
     private readonly IEmailProviderConfigRepository _configRepository;
+    private readonly IEmailProviderFactory _emailProviderFactory;
     private readonly ICurrentOrganization _currentOrg;
     private readonly IEncryptionService _encryptionService;
 
     public EmailProviderController(
         IEmailProviderConfigRepository configRepository,
+        IEmailProviderFactory emailProviderFactory,
         ICurrentOrganization currentOrg,
         IEncryptionService encryptionService)
     {
         _configRepository = configRepository;
+        _emailProviderFactory = emailProviderFactory;
         _currentOrg = currentOrg;
         _encryptionService = encryptionService;
     }
@@ -50,6 +53,45 @@ public class EmailProviderController : ControllerBase
             isActive = config.IsActive,
             createdAt = config.CreatedAt,
         });
+    }
+
+    [HttpGet("domains")]
+    public async Task<IActionResult> ListDomains(CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        if (_currentOrg.Role == "member" || _currentOrg.Role == "revoked")
+            return StatusCode(403, new { error = "permission_denied" });
+
+        var config = await _configRepository.GetByOrgAsync(
+            _currentOrg.OrganizationId.Value, cancellationToken);
+
+        if (config is null)
+            return Ok(new { domains = Array.Empty<object>(), message = "No email provider configured." });
+
+        try
+        {
+            var domains = await _emailProviderFactory.ListDomainsAsync(
+                _currentOrg.OrganizationId.Value, cancellationToken);
+
+            return Ok(new
+            {
+                providerType = config.ProviderType,
+                domains = domains.Select(d => new
+                {
+                    id = d.Id,
+                    domain = d.Domain,
+                    status = d.Status,
+                    verifiedAt = d.VerifiedAt,
+                    deliverabilityReady = d.DeliverabilityReady,
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            return Ok(new { domains = Array.Empty<object>(), error = $"Failed to fetch domains: {ex.Message}" });
+        }
     }
 
     [HttpPost]
