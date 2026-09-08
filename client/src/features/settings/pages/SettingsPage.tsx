@@ -519,9 +519,17 @@ export default function SettingsPage() {
                 </div>
               ) : (
                 <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
-                  <p className="text-sm text-ink/40">
-                    No domains verified yet. Add and verify a domain in your {emailProvider.providerType} dashboard.
+                  <p className="text-sm text-ink/60 font-medium mb-2">No domains verified yet</p>
+                  <p className="text-xs text-ink/40 mb-3">
+                    Verify your domain with {emailProvider.providerType} to send emails from your own address.
                   </p>
+                  <ol className="text-xs text-ink/50 space-y-1.5 list-decimal list-inside">
+                    <li>Go to your <strong>{emailProvider.providerType}</strong> dashboard → Domains</li>
+                    <li>Add your domain (e.g. <code className="bg-white px-1 py-0.5 rounded border border-ink/10">example.com</code>)</li>
+                    <li>Add the DNS records (TXT, CNAME, or MX) to your domain registrar</li>
+                    <li>Wait for verification (usually 5-30 minutes)</li>
+                    <li>Once verified, you can use your domain as the sender address</li>
+                  </ol>
                 </div>
               )}
             </div>
@@ -611,7 +619,9 @@ export default function SettingsPage() {
               <div className="flex gap-3">
                 <button
                   onClick={handleSaveProvider}
-                  disabled={providerSaving || !providerApiKey.trim()}
+                  disabled={providerSaving || (providerType === 'smtp'
+                    ? !smtpHost.trim() || !smtpPort.trim() || !smtpUsername.trim() || !smtpPassword.trim()
+                    : !providerApiKey.trim())}
                   className="px-4 py-2 bg-ink text-white rounded-lg text-sm font-medium hover:bg-violet transition disabled:opacity-50"
                 >
                   {providerSaving ? 'Connecting...' : 'Connect'}

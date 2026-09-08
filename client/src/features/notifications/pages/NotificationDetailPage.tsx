@@ -54,7 +54,7 @@ interface NotificationDetail {
   apiKeyName?: string
   workerId?: string
   acceptedAt?: string
-  completedAt?: string
+  processedAt?: string
   provider?: ProviderInfo
   campaign?: CampaignRef
   template?: TemplateRef
@@ -166,12 +166,14 @@ export default function NotificationDetailPage() {
     [notification]
   )
 
-  const lastLogAt = notification?.logs.length
-    ? notification.logs[notification.logs.length - 1].createdAt
+  const logs = Array.isArray(notification?.logs) ? notification!.logs : []
+
+  const lastLogAt = logs.length
+    ? logs[logs.length - 1].createdAt
     : null
 
   const deliveryTimeMs = notification
-    ? diffMs(notification.createdAt, notification.completedAt ?? lastLogAt)
+    ? diffMs(notification.createdAt, notification.processedAt ?? lastLogAt)
     : null
   const queueWaitMs = notification
     ? diffMs(notification.createdAt, notification.acceptedAt)
@@ -233,7 +235,7 @@ export default function NotificationDetailPage() {
                   </span>
                 )}
                 <span className="px-2.5 py-1 rounded-full bg-white/70 text-xs font-medium text-ink/70">
-                  Attempt {Math.max(notification.retryCount, notification.logs.length, 1)} of 5
+                  Attempt {Math.max(notification.retryCount, logs.length, 1)} of 5
                 </span>
               </div>
 
@@ -264,7 +266,7 @@ export default function NotificationDetailPage() {
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
           <MetricCard label="Delivery Time" value={isTerminal ? formatMs(deliveryTimeMs) : '—'} />
           <MetricCard label="Queue Wait" value={formatMs(queueWaitMs)} />
-          <MetricCard label="Attempts" value={String(Math.max(notification.retryCount, notification.logs.length, 1))} />
+          <MetricCard label="Attempts" value={String(Math.max(notification.retryCount, logs.length, 1))} />
           <MetricCard label="Worker" value={notification.workerId ?? '—'} mono />
           <MetricCard label="Channel" value={notification.channel} />
         </div>
@@ -294,12 +296,12 @@ export default function NotificationDetailPage() {
                 />
               )}
 
-              {notification.logs.length === 0 && notification.status === 'Pending' && (
+              {logs.length === 0 && notification.status === 'Pending' && (
                 <div className="ml-12 text-sm text-ink/30">Waiting in queue...</div>
               )}
 
               {/* One node per delivery attempt */}
-              {notification.logs.map((log, i) => (
+              {logs.map((log, i) => (
                 <TimelineNode
                   key={log.id}
                   label={log.isSuccess ? 'Provider accepted' : `Attempt ${i + 1} failed`}
@@ -312,7 +314,7 @@ export default function NotificationDetailPage() {
               {/* Final status */}
               <TimelineNode
                 label={status.label}
-                timestamp={notification.completedAt}
+                timestamp={notification.processedAt}
                 tone={notification.status === 'Sent' ? 'success' : notification.status === 'Failed' || notification.status === 'DeadLetter' ? 'error' : 'active'}
                 isFinal
               />
@@ -391,8 +393,8 @@ export default function NotificationDetailPage() {
                 <MetaRow label="API Key" value={notification.apiKeyName} />
               )}
               <MetaRow label="Created" value={new Date(notification.createdAt).toLocaleString()} />
-              {notification.completedAt && (
-                <MetaRow label="Updated" value={new Date(notification.completedAt).toLocaleString()} />
+              {notification.processedAt && (
+                <MetaRow label="Updated" value={new Date(notification.processedAt).toLocaleString()} />
               )}
             </dl>
           </div>
