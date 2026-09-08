@@ -17,7 +17,7 @@ public class EmailProviderConfigRepository : IEmailProviderConfigRepository
     public async Task<EmailProviderConfig?> GetByOrgAsync(Guid organizationId, CancellationToken cancellationToken = default)
     {
         return await _context.EmailProviderConfigs
-            .FirstOrDefaultAsync(c => c.OrganizationId == organizationId && c.IsActive, cancellationToken);
+            .FirstOrDefaultAsync(c => c.OrganizationId == organizationId, cancellationToken);
     }
 
     public async Task AddAsync(EmailProviderConfig config, CancellationToken cancellationToken = default)

@@ -42,7 +42,7 @@ public class EmailProviderController : ControllerBase
         var config = await _configRepository.GetByOrgAsync(
             _currentOrg.OrganizationId.Value, cancellationToken);
 
-        if (config is null)
+        if (config is null || !config.IsActive)
             return Ok(new { configured = false });
 
         return Ok(new
@@ -67,7 +67,7 @@ public class EmailProviderController : ControllerBase
         var config = await _configRepository.GetByOrgAsync(
             _currentOrg.OrganizationId.Value, cancellationToken);
 
-        if (config is null)
+        if (config is null || !config.IsActive)
             return Ok(new { domains = Array.Empty<object>(), message = "No email provider configured." });
 
         try
