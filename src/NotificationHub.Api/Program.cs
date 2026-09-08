@@ -18,6 +18,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(
                 "http://localhost:5173",
                 "https://notificationhub.space",
+                "https://www.notificationhub.space",
                 "https://notification-hub-chi.vercel.app")
               .AllowAnyHeader()
               .AllowAnyMethod()
