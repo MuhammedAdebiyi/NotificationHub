@@ -548,6 +548,7 @@ export default function SettingsPage() {
                   onChange={e => { setProviderType(e.target.value); setProviderApiKey(''); setProviderError(null) }}
                   className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet"
                 >
+                  <option value="sendbyte">SendByte</option>
                   <option value="resend">Resend</option>
                   <option value="sendgrid">SendGrid</option>
                   <option value="brevo">Brevo</option>
@@ -605,7 +606,7 @@ export default function SettingsPage() {
                   <label className="block text-sm font-medium mb-1">API Key</label>
                   <input
                     type="password"
-                    placeholder={providerType === 'resend' ? 're_...' : providerType === 'sendgrid' ? 'SG...' : 'xkeysib-...'}
+                    placeholder={providerType === 'sendbyte' ? 'sk_live_...' : providerType === 'resend' ? 're_...' : providerType === 'sendgrid' ? 'SG...' : 'xkeysib-...'}
                     value={providerApiKey}
                     onChange={e => setProviderApiKey(e.target.value)}
                     className="w-full border border-ink/20 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-violet"
