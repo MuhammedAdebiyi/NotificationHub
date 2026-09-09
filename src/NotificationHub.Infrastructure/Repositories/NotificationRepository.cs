@@ -54,12 +54,12 @@ public class NotificationRepository : INotificationRepository
         Guid organizationId, int page, int pageSize,
         CancellationToken cancellationToken = default)
     {
-        return await GetPagedAsync(organizationId, page, pageSize, null, null, cancellationToken);
+        return await GetPagedAsync(organizationId, page, pageSize, null, null, null, cancellationToken);
     }
 
     public async Task<(IReadOnlyList<Notification> Items, int TotalCount)> GetPagedAsync(
         Guid organizationId, int page, int pageSize,
-        DateTime? dateFrom, DateTime? dateTo,
+        DateTime? dateFrom, DateTime? dateTo, string? status,
         CancellationToken cancellationToken = default)
     {
         var query = _context.Notifications
@@ -70,6 +70,9 @@ public class NotificationRepository : INotificationRepository
 
         if (dateTo.HasValue)
             query = query.Where(n => n.CreatedAt <= dateTo.Value.AddDays(1));
+
+        if (!string.IsNullOrWhiteSpace(status))
+            query = query.Where(n => n.Status.ToString() == status);
 
         query = query.OrderByDescending(n => n.CreatedAt);
 

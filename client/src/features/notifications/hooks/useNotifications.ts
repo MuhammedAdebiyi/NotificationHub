@@ -11,18 +11,19 @@ export function useNotifications() {
   const [pageSize, setPageSize] = useState(50)
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [status, setStatus] = useState('')
 
   useEffect(() => {
     setIsLoading(true)
     notificationApi
-      .getAll(page, pageSize, dateFrom || undefined, dateTo || undefined)
+      .getAll(page, pageSize, dateFrom || undefined, dateTo || undefined, status || undefined)
       .then((res) => {
         setNotifications(res.items)
         setTotalCount(res.totalCount)
       })
       .catch((err) => setError(err.message))
       .finally(() => setIsLoading(false))
-  }, [page, pageSize, dateFrom, dateTo])
+  }, [page, pageSize, dateFrom, dateTo, status])
 
   return {
     notifications,
@@ -37,5 +38,7 @@ export function useNotifications() {
     setDateFrom,
     dateTo,
     setDateTo,
+    status,
+    setStatus,
   }
 }

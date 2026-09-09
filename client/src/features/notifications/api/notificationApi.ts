@@ -9,13 +9,14 @@ interface PaginatedNotifications {
 }
 
 export const notificationApi = {
-  getAll: (page = 1, pageSize = 50, dateFrom?: string, dateTo?: string) => {
+  getAll: (page = 1, pageSize = 50, dateFrom?: string, dateTo?: string, status?: string) => {
     const params = new URLSearchParams({
       page: page.toString(),
       pageSize: pageSize.toString(),
     })
     if (dateFrom) params.set('dateFrom', dateFrom)
     if (dateTo) params.set('dateTo', dateTo)
+    if (status) params.set('status', status)
     return apiClient.get<PaginatedNotifications>(
       `/api/v1/notifications?${params.toString()}`
     )

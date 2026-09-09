@@ -801,6 +801,14 @@ export default function SettingsPage() {
                     {SENDER_EMAIL_OPTIONS.map(opt => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
+                    {domains
+                      .filter(d => d.status === 'verified')
+                      .map(d => {
+                        const opt = `notifications@${d.domain}`
+                        return SENDER_EMAIL_OPTIONS.includes(opt) ? null : (
+                          <option key={d.id} value={opt}>{opt}</option>
+                        )
+                      })}
                   </select>
                   <button
                     onClick={handleSaveFromEmail}

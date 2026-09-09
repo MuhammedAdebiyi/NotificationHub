@@ -67,6 +67,7 @@ public class NotificationsController : ControllerBase
         [FromQuery] int pageSize = 20,
         [FromQuery] DateTime? dateFrom = null,
         [FromQuery] DateTime? dateTo = null,
+        [FromQuery] string? status = null,
         CancellationToken cancellationToken = default)
     {
         if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
@@ -75,7 +76,7 @@ public class NotificationsController : ControllerBase
         pageSize = Math.Clamp(pageSize, 1, 100);
 
         var query = new GetNotificationsQuery(
-            _currentOrg.OrganizationId.Value, page, pageSize, dateFrom, dateTo);
+            _currentOrg.OrganizationId.Value, page, pageSize, dateFrom, dateTo, status);
 
         var result = await _mediator.Send(query, cancellationToken);
 

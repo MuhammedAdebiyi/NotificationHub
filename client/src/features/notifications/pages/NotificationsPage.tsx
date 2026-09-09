@@ -16,6 +16,8 @@ export default function NotificationsPage() {
     setDateFrom,
     dateTo,
     setDateTo,
+    status,
+    setStatus,
   } = useNotifications()
 
   const totalPages = Math.ceil(totalCount / pageSize)
@@ -61,12 +63,28 @@ export default function NotificationsPage() {
             <option value={100}>100</option>
           </select>
         </div>
-        {(dateFrom || dateTo) && (
+        <div>
+          <label className="block text-xs font-medium text-ink/50 mb-1">Status</label>
+          <select
+            value={status}
+            onChange={e => { setStatus(e.target.value); setPage(1) }}
+            className="border border-ink/20 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet"
+          >
+            <option value="">All</option>
+            <option value="Pending">Pending</option>
+            <option value="Processing">Processing</option>
+            <option value="Sent">Sent</option>
+            <option value="Failed">Failed</option>
+            <option value="Retrying">Retrying</option>
+            <option value="DeadLetter">Dead Letter</option>
+          </select>
+        </div>
+        {(dateFrom || dateTo || status) && (
           <button
-            onClick={() => { setDateFrom(''); setDateTo(''); setPage(1) }}
+            onClick={() => { setDateFrom(''); setDateTo(''); setStatus(''); setPage(1) }}
             className="text-xs px-3 py-1.5 border border-ink/20 rounded-lg hover:bg-fog transition"
           >
-            Clear dates
+            Clear filters
           </button>
         )}
       </div>

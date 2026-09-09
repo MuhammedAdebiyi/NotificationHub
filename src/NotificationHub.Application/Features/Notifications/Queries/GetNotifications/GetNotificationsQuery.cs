@@ -8,7 +8,8 @@ public record GetNotificationsQuery(
     int Page = 1,
     int PageSize = 20,
     DateTime? DateFrom = null,
-    DateTime? DateTo = null
+    DateTime? DateTo = null,
+    string? Status = null
 ) : IRequest<Result<GetNotificationsResult>>;
 
 public record GetNotificationsResult(
