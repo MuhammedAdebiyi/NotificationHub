@@ -18,6 +18,7 @@ const Analytics = lazy(() => import('@/pages/Analytics'))
 const Users = lazy(() => import('@/pages/Users'))
 const TeamMember = lazy(() => import('@/pages/TeamMember'))
 const Settings = lazy(() => import('@/pages/Settings'))
+const ProviderDetail = lazy(() => import('@/pages/ProviderDetail'))
 const SelectOrg = lazy(() => import('@/pages/SelectOrg'))
 const VerifyEmail = lazy(() => import('@/pages/VerifyEmail'))
 const AccessRevoked = lazy(() => import('@/pages/AccessRevoked'))
@@ -62,6 +63,7 @@ export default function AppRouter() {
           <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
           <Route path="/team/:memberId" element={<ProtectedRoute><TeamMember /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/settings/providers/:id" element={<ProtectedRoute><ProviderDetail /></ProtectedRoute>} />
           <Route path="/settings/data-sources" element={<ProtectedRoute><DataSourcesPage /></ProtectedRoute>} />
           <Route path="/verify-email" element={<VerifyEmail />} />
 

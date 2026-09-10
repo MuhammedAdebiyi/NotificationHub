@@ -122,7 +122,10 @@ public class UserEmailProviderFactory : IEmailProviderFactory
                 }
 
                 var domains = await domainService.ListDomainsAsync(cancellationToken);
-                allDomains.AddRange(domains);
+                foreach (var d in domains)
+                {
+                    allDomains.Add(d with { ProviderType = config.ProviderType });
+                }
                 providerHealth.Add(new ProviderHealthCheck(config.ProviderType, config.Id, true));
             }
             catch (Exception ex)

@@ -38,6 +38,7 @@ interface EmailProviderStatus {
 interface ProviderDomain {
   id: string
   domain: string
+  providerType: string
   status: string
   verifiedAt: string | null
   deliverabilityReady: boolean
@@ -122,6 +123,7 @@ function RevokeConfirmModal({
 }
 
 export default function SettingsPage() {
+  const navigate = useNavigate()
   const currentUser = authService.getUser()
   const currentRole = currentUser?.role ?? 'member'
   const canManage = currentRole === 'owner' || currentRole === 'admin'
@@ -477,7 +479,11 @@ export default function SettingsPage() {
                     const health = providerHealth.find(h => h.providerId === p.id)
                     const hasError = health && !health.isHealthy
                     return (
-                    <div key={p.id} className={`border rounded-lg p-4 ${p.isDefault ? 'bg-teal/5 border-teal/20' : 'bg-fog/50 border-ink/10'} ${hasError ? 'border-coral/40 bg-coral/5' : ''}`}>
+                    <div
+                      key={p.id}
+                      onClick={() => navigate(`/settings/providers/${p.id}`)}
+                      className={`border rounded-lg p-4 cursor-pointer transition hover:shadow-sm ${p.isDefault ? 'bg-teal/5 border-teal/20' : 'bg-fog/50 border-ink/10'} ${hasError ? 'border-coral/40 bg-coral/5' : ''}`}
+                    >
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
@@ -520,36 +526,47 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* Verified Domains */}
-              {domains.length > 0 && (
-                <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
-                  <p className="text-xs font-medium text-ink/50 mb-3">Verified Domains</p>
-                  <div className="space-y-2">
-                    {domains.map(d => (
-                      <div key={d.id} className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-ink/5">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 rounded-full ${d.status === 'verified' ? 'bg-teal' : 'bg-amber'}`} />
-                          <span className="text-sm font-mono">{d.domain}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs px-2 py-0.5 rounded-full ${
-                            d.status === 'verified'
-                              ? 'bg-teal/10 text-teal'
-                              : 'bg-amber/10 text-amber'
-                          }`}>
-                            {d.status === 'verified' ? 'Active' : 'Pending'}
-                          </span>
-                          {d.deliverabilityReady && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-violet/10 text-violet">
-                              Ready
+              {/* Verified Domains — only for default provider */}
+              {(() => {
+                const defaultProvider = emailProviders.find(p => p.isDefault)
+                const defaultDomains = defaultProvider
+                  ? domains.filter(d => d.providerType === defaultProvider.providerType)
+                  : []
+                return defaultDomains.length > 0 && (
+                  <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
+                    <p className="text-xs font-medium text-ink/50 mb-3">
+                      Verified Domains ({defaultProvider?.providerType})
+                    </p>
+                    <div className="space-y-2">
+                      {defaultDomains.map(d => (
+                        <div key={d.id} className="flex items-center justify-between py-2 px-3 bg-white rounded-lg border border-ink/5">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${d.status === 'verified' ? 'bg-teal' : 'bg-amber'}`} />
+                            <span className="text-sm font-mono">{d.domain}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs px-2 py-0.5 rounded-full ${
+                              d.status === 'verified'
+                                ? 'bg-teal/10 text-teal'
+                                : 'bg-amber/10 text-amber'
+                            }`}>
+                              {d.status === 'verified' ? 'Active' : 'Pending'}
                             </span>
-                          )}
+                            {d.deliverabilityReady && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-violet/10 text-violet">
+                                Ready
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                    <p className="text-xs text-ink/30 mt-2">
+                      Click the provider card to see all domains.
+                    </p>
                   </div>
-                </div>
-              )}
+                )
+              })()}
 
               {/* No domains message */}
               {domains.length === 0 && !domainsLoading && emailProviders.length > 0 && (

@@ -8,7 +8,8 @@ public interface IEmailProviderDomains
 public record ProviderDomain(
     string Id,
     string Domain,
-    string Status, // "pending" or "verified"
-    DateTime? VerifiedAt,
-    bool DeliverabilityReady
+    string ProviderType = "",
+    string Status = "pending",
+    DateTime? VerifiedAt = null,
+    bool DeliverabilityReady = false
 );

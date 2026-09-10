@@ -75,6 +75,7 @@ public class EmailProviderController : ControllerBase
                 {
                     id = d.Id,
                     domain = d.Domain,
+                    providerType = d.ProviderType,
                     status = d.Status,
                     verifiedAt = d.VerifiedAt,
                     deliverabilityReady = d.DeliverabilityReady,
