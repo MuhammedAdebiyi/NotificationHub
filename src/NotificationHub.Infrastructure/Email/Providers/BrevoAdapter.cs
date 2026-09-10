@@ -17,8 +17,8 @@ public class BrevoAdapter : IEmailProvider, IEmailProviderDomains
     {
         _http = http;
         _logger = logger;
-        _http.DefaultRequestHeaders.Authorization =
-            new AuthenticationHeaderValue("api-key", apiKey);
+        _http.DefaultRequestHeaders.Remove("Authorization");
+        _http.DefaultRequestHeaders.Add("api-key", apiKey);
     }
 
     public async Task<string> SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
