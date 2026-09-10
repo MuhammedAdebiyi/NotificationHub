@@ -66,24 +66,31 @@ public class EmailProviderController : ControllerBase
 
         try
         {
-            var domains = await _emailProviderFactory.ListDomainsAsync(
+            var result = await _emailProviderFactory.ListDomainsWithHealthAsync(
                 _currentOrg.OrganizationId.Value, cancellationToken);
 
             return Ok(new
             {
-                domains = domains.Select(d => new
+                domains = result.Domains.Select(d => new
                 {
                     id = d.Id,
                     domain = d.Domain,
                     status = d.Status,
                     verifiedAt = d.VerifiedAt,
                     deliverabilityReady = d.DeliverabilityReady,
+                }),
+                providerHealth = result.ProviderHealth.Select(h => new
+                {
+                    providerType = h.ProviderType,
+                    providerId = h.ProviderId,
+                    isHealthy = h.IsHealthy,
+                    error = h.Error,
                 })
             });
         }
         catch (Exception ex)
         {
-            return Ok(new { domains = Array.Empty<object>(), error = $"Failed to fetch domains: {ex.Message}" });
+            return Ok(new { domains = Array.Empty<object>(), providerHealth = Array.Empty<object>(), error = $"Failed to fetch domains: {ex.Message}" });
         }
     }
 

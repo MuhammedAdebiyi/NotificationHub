@@ -99,7 +99,7 @@ public class UserEmailProviderFactory : IEmailProviderFactory
         )).ToList();
     }
 
-    public async Task<IReadOnlyList<ProviderDomain>> ListDomainsAsync(Guid organizationId, CancellationToken cancellationToken = default)
+    public async Task<DomainsResult> ListDomainsWithHealthAsync(Guid organizationId, CancellationToken cancellationToken = default)
     {
         using var scope = _serviceProvider.CreateScope();
         var configRepo = scope.ServiceProvider.GetRequiredService<IEmailProviderConfigRepository>();
@@ -107,6 +107,7 @@ public class UserEmailProviderFactory : IEmailProviderFactory
 
         var configs = await configRepo.GetAllByOrgAsync(organizationId, cancellationToken);
         var allDomains = new List<ProviderDomain>();
+        var providerHealth = new List<ProviderHealthCheck>();
 
         foreach (var config in configs)
         {
@@ -114,19 +115,28 @@ public class UserEmailProviderFactory : IEmailProviderFactory
             {
                 var apiKey = encryptionService.Decrypt(config.EncryptedApiKey);
                 var domainService = CreateDomainService(config, apiKey, scope.ServiceProvider);
-                if (domainService is null) continue;
+                if (domainService is null)
+                {
+                    providerHealth.Add(new ProviderHealthCheck(config.ProviderType, config.Id, false, "Domain listing not supported for this provider"));
+                    continue;
+                }
 
                 var domains = await domainService.ListDomainsAsync(cancellationToken);
                 allDomains.AddRange(domains);
+                providerHealth.Add(new ProviderHealthCheck(config.ProviderType, config.Id, true));
             }
             catch (Exception ex)
             {
+                var message = ex.Message.Contains("401") || ex.Message.Contains("expired") || ex.Message.Contains("unauthorized")
+                    ? "API key is invalid or expired — update your provider key"
+                    : $"Failed to connect: {ex.Message}";
                 _logger.LogWarning(ex, "Failed to list domains for {ProviderType} on org {OrgId}",
                     config.ProviderType, organizationId);
+                providerHealth.Add(new ProviderHealthCheck(config.ProviderType, config.Id, false, message));
             }
         }
 
-        return allDomains;
+        return new DomainsResult(allDomains, providerHealth);
     }
 
     private IEmailProvider CreateProvider(

@@ -43,6 +43,13 @@ interface ProviderDomain {
   deliverabilityReady: boolean
 }
 
+interface ProviderHealth {
+  providerType: string
+  providerId: string
+  isHealthy: boolean
+  error: string | null
+}
+
 const SENDER_EMAIL_OPTIONS = [
   'notifications@mail.notificationhub.space',
 ]
@@ -164,6 +171,7 @@ export default function SettingsPage() {
   // Verified domains
   const [domains, setDomains] = useState<ProviderDomain[]>([])
   const [domainsLoading, setDomainsLoading] = useState(false)
+  const [providerHealth, setProviderHealth] = useState<ProviderHealth[]>([])
 
   if (!canManage) return <PermissionWall />
 
@@ -209,11 +217,14 @@ export default function SettingsPage() {
   async function loadDomains() {
     setDomainsLoading(true)
     try {
-      const res = await apiClient.get<{ providerType: string; domains: ProviderDomain[]; error?: string }>(
+      const res = await apiClient.get<{ domains: ProviderDomain[]; providerHealth: ProviderHealth[]; error?: string }>(
         '/api/v1/org/email-provider/domains'
       )
       if (!res.error) {
         setDomains(res.domains)
+      }
+      if (res.providerHealth) {
+        setProviderHealth(res.providerHealth)
       }
     } catch {
       // fail silently
@@ -462,20 +473,30 @@ export default function SettingsPage() {
               {/* Provider list */}
               {emailProviders.length > 0 && (
                 <div className="space-y-2">
-                  {emailProviders.map(p => (
-                    <div key={p.id} className={`border rounded-lg p-4 ${p.isDefault ? 'bg-teal/5 border-teal/20' : 'bg-fog/50 border-ink/10'}`}>
+                  {emailProviders.map(p => {
+                    const health = providerHealth.find(h => h.providerId === p.id)
+                    const hasError = health && !health.isHealthy
+                    return (
+                    <div key={p.id} className={`border rounded-lg p-4 ${p.isDefault ? 'bg-teal/5 border-teal/20' : 'bg-fog/50 border-ink/10'} ${hasError ? 'border-coral/40 bg-coral/5' : ''}`}>
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={`w-2 h-2 rounded-full ${p.isDefault ? 'bg-teal' : 'bg-ink/30'}`} />
+                            <span className={`w-2 h-2 rounded-full ${hasError ? 'bg-coral' : p.isDefault ? 'bg-teal' : 'bg-ink/30'}`} />
                             <span className="text-sm font-medium capitalize">{p.providerType}</span>
                             {p.isDefault && (
                               <span className="text-xs px-2 py-0.5 rounded-full bg-teal/10 text-teal">Default</span>
                             )}
+                            {hasError && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-coral/10 text-coral font-medium">Error</span>
+                            )}
                           </div>
-                          <p className="text-xs text-ink/40">
-                            {p.isDefault ? 'Primary — used for sending' : 'Fallback — tried if primary fails'}
-                          </p>
+                          {hasError ? (
+                            <p className="text-xs text-coral/80">{health.error}</p>
+                          ) : (
+                            <p className="text-xs text-ink/40">
+                              {p.isDefault ? 'Primary — used for sending' : 'Fallback — tried if primary fails'}
+                            </p>
+                          )}
                         </div>
                         <div className="flex gap-2">
                           {!p.isDefault && (
@@ -495,7 +516,7 @@ export default function SettingsPage() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    )})}
                 </div>
               )}
 
