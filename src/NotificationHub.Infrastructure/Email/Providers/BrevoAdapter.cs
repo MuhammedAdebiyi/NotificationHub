@@ -11,7 +11,7 @@ public class BrevoAdapter : IEmailProvider, IEmailProviderDomains
     private readonly HttpClient _http;
     private readonly ILogger<BrevoAdapter> _logger;
     private const string Endpoint = "https://api.brevo.com/v3/smtp/email";
-    private const string SendersEndpoint = "https://api.brevo.com/v3/smtp/senders";
+    private const string DomainsEndpoint = "https://api.brevo.com/v3/senders/domains";
 
     public BrevoAdapter(HttpClient http, string apiKey, ILogger<BrevoAdapter> logger)
     {
@@ -64,37 +64,38 @@ public class BrevoAdapter : IEmailProvider, IEmailProviderDomains
 
     public async Task<IReadOnlyList<ProviderDomain>> ListDomainsAsync(CancellationToken cancellationToken = default)
     {
-        var response = await _http.GetAsync(SendersEndpoint, cancellationToken);
+        var response = await _http.GetAsync(DomainsEndpoint, cancellationToken);
         var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
-            _logger.LogError("Brevo senders API error {Status}: {Body}", (int)response.StatusCode, responseBody);
+            _logger.LogError("Brevo domains API error {Status}: {Body}", (int)response.StatusCode, responseBody);
             return Array.Empty<ProviderDomain>();
         }
 
         using var doc = JsonDocument.Parse(responseBody);
-        var senders = doc.RootElement.GetProperty("senders");
-        var domains = new Dictionary<string, ProviderDomain>();
+        var domains = new List<ProviderDomain>();
 
-        foreach (var item in senders.EnumerateArray())
+        if (doc.RootElement.TryGetProperty("domains", out var domainsArray))
         {
-            var email = item.TryGetProperty("email", out var e) ? e.GetString() ?? string.Empty : string.Empty;
-            var domain = string.IsNullOrEmpty(email) ? string.Empty : email.Split('@').LastOrDefault() ?? string.Empty;
+            foreach (var item in domainsArray.EnumerateArray())
+            {
+                var domainName = item.TryGetProperty("domain_name", out var dn) ? dn.GetString() ?? string.Empty : string.Empty;
+                if (string.IsNullOrEmpty(domainName)) continue;
 
-            if (string.IsNullOrEmpty(domain) || domains.ContainsKey(domain))
-                continue;
+                var verified = item.TryGetProperty("verified", out var v) && v.GetBoolean();
+                var authenticated = item.TryGetProperty("authenticated", out var a) && a.GetBoolean();
 
-            var quality = item.TryGetProperty("quality", out var q) ? q.GetString() ?? "unknown" : "unknown";
-            domains[domain] = new ProviderDomain(
-                Id: domain,
-                Domain: domain,
-                Status: quality == "valid" ? "verified" : quality == "pending" ? "pending" : "unknown",
-                VerifiedAt: null,
-                DeliverabilityReady: quality == "valid"
-            );
+                domains.Add(new ProviderDomain(
+                    Id: item.TryGetProperty("id", out var id) ? id.GetString() ?? domainName : domainName,
+                    Domain: domainName,
+                    Status: verified && authenticated ? "verified" : verified ? "pending" : "unverified",
+                    VerifiedAt: null,
+                    DeliverabilityReady: verified && authenticated
+                ));
+            }
         }
 
-        return domains.Values.ToList();
+        return domains;
     }
 }

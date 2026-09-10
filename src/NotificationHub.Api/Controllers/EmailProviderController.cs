@@ -31,7 +31,7 @@ public class EmailProviderController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetConfig(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
     {
         if (_currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
@@ -39,19 +39,19 @@ public class EmailProviderController : ControllerBase
         if (_currentOrg.Role == "member" || _currentOrg.Role == "revoked")
             return StatusCode(403, new { error = "permission_denied" });
 
-        var config = await _configRepository.GetByOrgAsync(
+        var providers = await _emailProviderFactory.GetAllProvidersAsync(
             _currentOrg.OrganizationId.Value, cancellationToken);
-
-        if (config is null || !config.IsActive)
-            return Ok(new { configured = false });
 
         return Ok(new
         {
-            configured = true,
-            providerType = config.ProviderType,
-            senderEmail = config.SenderEmail,
-            isActive = config.IsActive,
-            createdAt = config.CreatedAt,
+            providers = providers.Select(p => new
+            {
+                id = p.Id,
+                providerType = p.ProviderType,
+                isActive = p.IsActive,
+                isDefault = p.IsDefault,
+                createdAt = p.CreatedAt,
+            })
         });
     }
 
@@ -64,12 +64,6 @@ public class EmailProviderController : ControllerBase
         if (_currentOrg.Role == "member" || _currentOrg.Role == "revoked")
             return StatusCode(403, new { error = "permission_denied" });
 
-        var config = await _configRepository.GetByOrgAsync(
-            _currentOrg.OrganizationId.Value, cancellationToken);
-
-        if (config is null || !config.IsActive)
-            return Ok(new { domains = Array.Empty<object>(), message = "No email provider configured." });
-
         try
         {
             var domains = await _emailProviderFactory.ListDomainsAsync(
@@ -77,7 +71,6 @@ public class EmailProviderController : ControllerBase
 
             return Ok(new
             {
-                providerType = config.ProviderType,
                 domains = domains.Select(d => new
                 {
                     id = d.Id,
@@ -115,37 +108,42 @@ public class EmailProviderController : ControllerBase
         if (!supportedProviders.Contains(request.ProviderType.ToLowerInvariant()))
             return BadRequest(new { error = $"Unsupported provider. Supported: {string.Join(", ", supportedProviders)}" });
 
+        var orgId = _currentOrg.OrganizationId.Value;
+        var providerType = request.ProviderType.ToLowerInvariant();
         var encryptedKey = _encryptionService.Encrypt(request.ApiKey.Trim());
 
-        var existing = await _configRepository.GetByOrgAsync(
-            _currentOrg.OrganizationId.Value, cancellationToken);
+        // Check if this provider type already exists for this org
+        var existing = await _configRepository.GetByOrgAndTypeAsync(orgId, providerType, cancellationToken);
 
         if (existing is not null)
         {
             existing.EncryptedApiKey = encryptedKey;
-            existing.ProviderType = request.ProviderType.ToLowerInvariant();
             existing.SenderEmail = request.SenderEmail?.Trim();
             existing.IsActive = true;
             await _configRepository.SaveChangesAsync(cancellationToken);
-        }
-        else
-        {
-            var config = new EmailProviderConfig
-            {
-                OrganizationId = _currentOrg.OrganizationId.Value,
-                ProviderType = request.ProviderType.ToLowerInvariant(),
-                EncryptedApiKey = encryptedKey,
-                SenderEmail = request.SenderEmail?.Trim(),
-                IsActive = true,
-            };
-            await _configRepository.AddAsync(config, cancellationToken);
+            return Ok(new { configured = true, providerType, id = existing.Id });
         }
 
-        return Ok(new { configured = true, providerType = request.ProviderType.ToLowerInvariant() });
+        // Check if this is the first provider — make it default automatically
+        var allConfigs = await _configRepository.GetAllByOrgAsync(orgId, cancellationToken);
+        var isFirst = allConfigs.Count == 0;
+
+        var config = new EmailProviderConfig
+        {
+            OrganizationId = orgId,
+            ProviderType = providerType,
+            EncryptedApiKey = encryptedKey,
+            SenderEmail = request.SenderEmail?.Trim(),
+            IsActive = true,
+            IsDefault = isFirst,
+        };
+        await _configRepository.AddAsync(config, cancellationToken);
+
+        return Ok(new { configured = true, providerType, id = config.Id, isDefault = isFirst });
     }
 
-    [HttpDelete]
-    public async Task<IActionResult> RemoveConfig(CancellationToken cancellationToken)
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Remove(Guid id, CancellationToken cancellationToken)
     {
         if (_currentOrg.OrganizationId is null)
             return Unauthorized(new { error = "No organization context." });
@@ -153,16 +151,43 @@ public class EmailProviderController : ControllerBase
         if (_currentOrg.Role == "member" || _currentOrg.Role == "revoked")
             return StatusCode(403, new { error = "permission_denied" });
 
-        var config = await _configRepository.GetByOrgAsync(
+        var configs = await _configRepository.GetAllByOrgAsync(
             _currentOrg.OrganizationId.Value, cancellationToken);
 
+        var config = configs.FirstOrDefault(c => c.Id == id);
         if (config is null)
-            return NotFound(new { error = "No email provider configured." });
+            return NotFound(new { error = "Provider not found." });
 
         config.IsActive = false;
         await _configRepository.SaveChangesAsync(cancellationToken);
 
         return Ok(new { removed = true });
+    }
+
+    [HttpPut("{id:guid}/default")]
+    public async Task<IActionResult> SetDefault(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        if (_currentOrg.Role == "member" || _currentOrg.Role == "revoked")
+            return StatusCode(403, new { error = "permission_denied" });
+
+        var orgId = _currentOrg.OrganizationId.Value;
+        var configs = await _configRepository.GetAllByOrgAsync(orgId, cancellationToken);
+
+        var target = configs.FirstOrDefault(c => c.Id == id);
+        if (target is null)
+            return NotFound(new { error = "Provider not found." });
+
+        // Unset current default and set new one
+        foreach (var c in configs.Where(c => c.IsDefault))
+            c.IsDefault = false;
+
+        target.IsDefault = true;
+        await _configRepository.SaveChangesAsync(cancellationToken);
+
+        return Ok(new { updated = true, defaultProviderType = target.ProviderType });
     }
 }
 

@@ -39,13 +39,31 @@ public sealed class AnalyticsService : IAnalyticsService
         var successRate = total == 0 ? 100.0 : Math.Round((double)sent / total * 100, 2);
 
         var server        = _redis.GetServer(_redis.GetEndPoints()[0]);
-        var heartbeats    = server.Keys(pattern: "worker:heartbeat:*").ToArray();
-        var workersOnline = heartbeats.Length;
+        int workersOnline;
+        try
+        {
+            var heartbeats    = server.Keys(pattern: "worker:heartbeat:*").ToArray();
+            workersOnline = heartbeats.Length;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Redis SCAN failed, assuming workers unknown");
+            workersOnline = 0;
+        }
 
         var dbLatency    = await PingDatabaseAsync(ct);
         var redisLatency = await PingRedisAsync();
 
-        var queueLength    = await db.ListLengthAsync("notification_queue");
+        long queueLength;
+        try
+        {
+            queueLength    = await db.ListLengthAsync("notification_queue");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Redis queue length check failed");
+            queueLength = 0;
+        }
         var queueLatencyMs = queueLength * 2;
 
         var deadLetters = await _context.Notifications.CountAsync(
@@ -487,7 +505,16 @@ public sealed class AnalyticsService : IAnalyticsService
         var redisLatency = await PingRedisAsync();
 
         var server        = _redis.GetServer(_redis.GetEndPoints()[0]);
-        var workersOnline = server.Keys(pattern: "worker:heartbeat:*").Count();
+        int workersOnline;
+        try
+        {
+            workersOnline = server.Keys(pattern: "worker:heartbeat:*").Count();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Redis SCAN failed in infrastructure, assuming workers unknown");
+            workersOnline = 0;
+        }
 
         // FIX: same as GetHealthAsync — use IsSuccess, not string-matching "success".
         var recentLogs = await _context.NotificationLogs

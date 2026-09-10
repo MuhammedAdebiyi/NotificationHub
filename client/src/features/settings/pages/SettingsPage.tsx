@@ -26,10 +26,12 @@ interface OrgInfo {
 }
 
 interface EmailProviderStatus {
+  id: string
   configured: boolean
   providerType?: string
   senderEmail?: string
   isActive?: boolean
+  isDefault?: boolean
   createdAt?: string
 }
 
@@ -143,7 +145,7 @@ export default function SettingsPage() {
   const [replyToError, setReplyToError] = useState<string | null>(null)
 
   // Email provider state
-  const [emailProvider, setEmailProvider] = useState<EmailProviderStatus | null>(null)
+  const [emailProviders, setEmailProviders] = useState<EmailProviderStatus[]>([])
   const [emailProviderLoading, setEmailProviderLoading] = useState(true)
   const [showProviderForm, setShowProviderForm] = useState(false)
   const [providerApiKey, setProviderApiKey] = useState('')
@@ -151,7 +153,7 @@ export default function SettingsPage() {
   const [providerSaving, setProviderSaving] = useState(false)
   const [providerError, setProviderError] = useState<string | null>(null)
   const [providerSaved, setProviderSaved] = useState(false)
-  const [showRemoveProvider, setShowRemoveProvider] = useState(false)
+  const [showRemoveProvider, setShowRemoveProvider] = useState<string | null>(null)
 
   // SMTP-specific fields
   const [smtpHost, setSmtpHost] = useState('')
@@ -193,9 +195,9 @@ export default function SettingsPage() {
 
   async function loadEmailProvider() {
     try {
-      const res = await apiClient.get<EmailProviderStatus>('/api/v1/org/email-provider')
-      setEmailProvider(res)
-      if (res.configured) {
+      const res = await apiClient.get<{ providers: EmailProviderStatus[] }>('/api/v1/org/email-provider')
+      setEmailProviders(res.providers)
+      if (res.providers.length > 0) {
         loadDomains()
       }
     } catch {
@@ -354,11 +356,20 @@ export default function SettingsPage() {
     }
   }
 
-  async function handleRemoveProvider() {
+  async function handleRemoveProvider(id: string) {
     try {
-      await apiClient.delete('/api/v1/org/email-provider')
-      setEmailProvider(null)
-      setShowRemoveProvider(false)
+      await apiClient.delete(`/api/v1/org/email-provider/${id}`)
+      setShowRemoveProvider(null)
+      await loadEmailProvider()
+    } catch {
+      // fail silently
+    }
+  }
+
+  async function handleSetDefaultProvider(id: string) {
+    try {
+      await apiClient.put(`/api/v1/org/email-provider/${id}/default`, {})
+      await loadEmailProvider()
     } catch {
       // fail silently
     }
@@ -376,7 +387,7 @@ export default function SettingsPage() {
 
       {showRemoveProvider && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={() => setShowRemoveProvider(false)} />
+          <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={() => setShowRemoveProvider(null)} />
           <div className="relative bg-white rounded-2xl p-8 max-w-sm w-full mx-4 shadow-2xl">
             <div className="w-12 h-12 bg-coral/10 rounded-full flex items-center justify-center mb-4">
               <span className="text-coral text-xl">✕</span>
@@ -387,13 +398,13 @@ export default function SettingsPage() {
             </p>
             <div className="flex gap-3">
               <button
-                onClick={handleRemoveProvider}
+                onClick={() => handleRemoveProvider(showRemoveProvider)}
                 className="flex-1 px-4 py-2.5 bg-coral text-white rounded-lg text-sm font-medium hover:bg-coral/80 transition"
               >
                 Remove
               </button>
               <button
-                onClick={() => setShowRemoveProvider(false)}
+                onClick={() => setShowRemoveProvider(null)}
                 className="flex-1 px-4 py-2.5 border border-ink/20 rounded-lg text-sm font-medium hover:bg-fog transition"
               >
                 Cancel
@@ -441,55 +452,58 @@ export default function SettingsPage() {
         {/* Email Provider section */}
         <div className="bg-white border border-ink/10 rounded-xl p-6">
           <div className="flex items-center justify-between mb-1">
-            <h2 className="font-display font-bold text-lg">Email Provider</h2>
+            <h2 className="font-display font-bold text-lg">Email Providers</h2>
           </div>
           <p className="text-xs text-ink/40 mb-6">
-            Connect your own email provider to send campaigns from your domain.
-            Without this, emails send from the platform default.
+            Connect multiple providers for automatic fallback. If one fails, the next is tried.
           </p>
 
           {emailProviderLoading ? (
             <p className="text-sm text-ink/40 text-center py-6">Loading...</p>
-          ) : emailProvider?.configured && !showProviderForm ? (
+          ) : (
             <div className="space-y-4">
-              <div className="bg-teal/5 border border-teal/20 rounded-lg p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="w-2 h-2 rounded-full bg-teal" />
-                      <span className="text-sm font-medium capitalize">{emailProvider.providerType} connected</span>
+              {/* Provider list */}
+              {emailProviders.length > 0 && (
+                <div className="space-y-2">
+                  {emailProviders.map(p => (
+                    <div key={p.id} className={`border rounded-lg p-4 ${p.isDefault ? 'bg-teal/5 border-teal/20' : 'bg-fog/50 border-ink/10'}`}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`w-2 h-2 rounded-full ${p.isDefault ? 'bg-teal' : 'bg-ink/30'}`} />
+                            <span className="text-sm font-medium capitalize">{p.providerType}</span>
+                            {p.isDefault && (
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-teal/10 text-teal">Default</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-ink/40">
+                            {p.isDefault ? 'Primary — used for sending' : 'Fallback — tried if primary fails'}
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          {!p.isDefault && (
+                            <button
+                              onClick={() => handleSetDefaultProvider(p.id)}
+                              className="text-xs px-3 py-1.5 border border-ink/20 rounded-lg hover:bg-fog transition"
+                            >
+                              Set default
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setShowRemoveProvider(p.id)}
+                            className="text-xs px-3 py-1.5 border border-coral/30 text-coral rounded-lg hover:bg-red-50 transition"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-xs text-ink/40">
-                      Campaigns will send through your {emailProvider.providerType} account.
-                    </p>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setShowProviderForm(true)}
-                      className="text-xs px-3 py-1.5 border border-ink/20 rounded-lg hover:bg-fog transition"
-                    >
-                      Update key
-                    </button>
-                    <button
-                      onClick={() => setShowRemoveProvider(true)}
-                      className="text-xs px-3 py-1.5 border border-coral/30 text-coral rounded-lg hover:bg-red-50 transition"
-                    >
-                      Remove
-                    </button>
-                  </div>
+                  ))}
                 </div>
-              </div>
+              )}
 
               {/* Verified Domains */}
-              {domainsLoading ? (
-                <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
-                  <p className="text-sm text-ink/40 text-center">Loading domains...</p>
-                </div>
-              ) : domainsError ? (
-                <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
-                  <p className="text-sm text-ink/40">{domainsError}</p>
-                </div>
-              ) : domains.length > 0 ? (
+              {domains.length > 0 && (
                 <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
                   <p className="text-xs font-medium text-ink/50 mb-3">Verified Domains</p>
                   <div className="space-y-2">
@@ -517,14 +531,17 @@ export default function SettingsPage() {
                     ))}
                   </div>
                 </div>
-              ) : (
+              )}
+
+              {/* No domains message */}
+              {domains.length === 0 && !domainsLoading && emailProviders.length > 0 && (
                 <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
                   <p className="text-sm text-ink/60 font-medium mb-2">No domains verified yet</p>
                   <p className="text-xs text-ink/40 mb-3">
-                    Verify your domain with {emailProvider.providerType} to send emails from your own address.
+                    Verify your domain with your email provider to send emails from your own address.
                   </p>
                   <ol className="text-xs text-ink/50 space-y-1.5 list-decimal list-inside">
-                    <li>Go to your <strong>{emailProvider.providerType}</strong> dashboard → Domains</li>
+                    <li>Go to your email provider dashboard → Domains</li>
                     <li>Add your domain (e.g. <code className="bg-white px-1 py-0.5 rounded border border-ink/10">example.com</code>)</li>
                     <li>Add the DNS records (TXT, CNAME, or MX) to your domain registrar</li>
                     <li>Wait for verification (usually 5-30 minutes)</li>
@@ -532,15 +549,36 @@ export default function SettingsPage() {
                   </ol>
                 </div>
               )}
-            </div>
-          ) : showProviderForm ? (
-            <div className="space-y-4">
-              {providerError && (
-                <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-xl">{providerError}</div>
+
+              {/* No providers message */}
+              {emailProviders.length === 0 && !showProviderForm && (
+                <div className="bg-fog/50 border border-ink/10 rounded-lg p-4">
+                  <p className="text-sm text-ink/60">
+                    No email provider connected. Emails send from the platform default
+                    (<span className="font-mono text-xs">notifications@mail.notificationhub.space</span>).
+                  </p>
+                </div>
               )}
-              {providerSaved && (
-                <div className="bg-teal/10 text-teal text-sm px-4 py-3 rounded-xl">✓ Provider connected</div>
+
+              {/* Add provider button */}
+              {!showProviderForm && (
+                <button
+                  onClick={() => setShowProviderForm(true)}
+                  className="w-full py-3 border-2 border-dashed border-ink/20 rounded-lg text-sm text-ink/40 hover:border-violet hover:text-violet transition"
+                >
+                  + Add Provider
+                </button>
               )}
+
+              {/* Add provider form */}
+              {showProviderForm && (
+                <div className="space-y-4">
+                  {providerError && (
+                    <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-xl">{providerError}</div>
+                  )}
+                  {providerSaved && (
+                    <div className="bg-teal/10 text-teal text-sm px-4 py-3 rounded-xl">✓ Provider connected</div>
+                  )}
               <div>
                 <label className="block text-sm font-medium mb-1">Provider</label>
                 <select
@@ -635,20 +673,7 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
-          ) : (
-            <div>
-              <div className="bg-fog/50 border border-ink/10 rounded-lg p-4 mb-4">
-                <p className="text-sm text-ink/60">
-                  No email provider connected. Emails send from the platform default
-                  (<span className="font-mono text-xs">notifications@mail.notificationhub.space</span>).
-                </p>
-              </div>
-              <button
-                onClick={() => setShowProviderForm(true)}
-                className="px-4 py-2 bg-ink text-white rounded-lg text-sm font-medium hover:bg-violet transition"
-              >
-                + Connect Provider
-              </button>
+            )}
             </div>
           )}
         </div>

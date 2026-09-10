@@ -20,6 +20,27 @@ public class EmailProviderConfigRepository : IEmailProviderConfigRepository
             .FirstOrDefaultAsync(c => c.OrganizationId == organizationId, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<EmailProviderConfig>> GetAllByOrgAsync(Guid organizationId, CancellationToken cancellationToken = default)
+    {
+        return await _context.EmailProviderConfigs
+            .Where(c => c.OrganizationId == organizationId)
+            .OrderByDescending(c => c.IsDefault)
+            .ThenByDescending(c => c.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<EmailProviderConfig?> GetDefaultAsync(Guid organizationId, CancellationToken cancellationToken = default)
+    {
+        return await _context.EmailProviderConfigs
+            .FirstOrDefaultAsync(c => c.OrganizationId == organizationId && c.IsDefault, cancellationToken);
+    }
+
+    public async Task<EmailProviderConfig?> GetByOrgAndTypeAsync(Guid organizationId, string providerType, CancellationToken cancellationToken = default)
+    {
+        return await _context.EmailProviderConfigs
+            .FirstOrDefaultAsync(c => c.OrganizationId == organizationId && c.ProviderType == providerType, cancellationToken);
+    }
+
     public async Task AddAsync(EmailProviderConfig config, CancellationToken cancellationToken = default)
     {
         _context.EmailProviderConfigs.Add(config);

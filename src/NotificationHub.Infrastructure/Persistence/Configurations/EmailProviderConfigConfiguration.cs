@@ -13,7 +13,8 @@ public class EmailProviderConfigConfiguration : IEntityTypeConfiguration<EmailPr
         builder.Property(c => c.EncryptedApiKey).IsRequired();
         builder.Property(c => c.SenderEmail).HasMaxLength(200);
 
-        builder.HasIndex(c => c.OrganizationId).IsUnique();
+        builder.HasIndex(c => new { c.OrganizationId, c.ProviderType }).IsUnique();
+        builder.HasIndex(c => c.OrganizationId);
 
         builder.HasOne(c => c.Organization)
             .WithMany()
