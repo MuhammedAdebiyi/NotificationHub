@@ -164,7 +164,6 @@ export default function SettingsPage() {
   // Verified domains
   const [domains, setDomains] = useState<ProviderDomain[]>([])
   const [domainsLoading, setDomainsLoading] = useState(false)
-  const [domainsError, setDomainsError] = useState<string | null>(null)
 
   if (!canManage) return <PermissionWall />
 
@@ -209,18 +208,15 @@ export default function SettingsPage() {
 
   async function loadDomains() {
     setDomainsLoading(true)
-    setDomainsError(null)
     try {
       const res = await apiClient.get<{ providerType: string; domains: ProviderDomain[]; error?: string }>(
         '/api/v1/org/email-provider/domains'
       )
-      if (res.error) {
-        setDomainsError(res.error)
-      } else {
+      if (!res.error) {
         setDomains(res.domains)
       }
-    } catch (err) {
-      setDomainsError(err instanceof Error ? err.message : 'Failed to load domains')
+    } catch {
+      // fail silently
     } finally {
       setDomainsLoading(false)
     }
