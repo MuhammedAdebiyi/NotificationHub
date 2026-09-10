@@ -23,7 +23,7 @@ public class EmailProviderConfigRepository : IEmailProviderConfigRepository
     public async Task<IReadOnlyList<EmailProviderConfig>> GetAllByOrgAsync(Guid organizationId, CancellationToken cancellationToken = default)
     {
         return await _context.EmailProviderConfigs
-            .Where(c => c.OrganizationId == organizationId)
+            .Where(c => c.OrganizationId == organizationId && c.IsActive)
             .OrderByDescending(c => c.IsDefault)
             .ThenByDescending(c => c.CreatedAt)
             .ToListAsync(cancellationToken);

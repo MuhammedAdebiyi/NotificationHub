@@ -357,8 +357,9 @@ export default function SettingsPage() {
       await apiClient.delete(`/api/v1/org/email-provider/${id}`)
       setShowRemoveProvider(null)
       await loadEmailProvider()
-    } catch {
-      // fail silently
+    } catch (err) {
+      setProviderError(err instanceof Error ? err.message : 'Failed to remove provider.')
+      setShowRemoveProvider(null)
     }
   }
 
