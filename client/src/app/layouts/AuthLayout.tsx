@@ -10,8 +10,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
               NotificationHub<span className="text-violet">.</span>
             </a>
             <div className="hidden sm:flex items-center gap-1">
-              <a href="#features" className="px-3 py-2 rounded-full text-sm font-medium hover:bg-fog transition">Features</a>
-              <a href="#resources" className="px-3 py-2 rounded-full text-sm font-medium hover:bg-fog transition">Resources</a>
+              <a href="/#features" className="px-3 py-2 rounded-full text-sm font-medium hover:bg-fog transition">Features</a>
+              <a href="/#resources" className="px-3 py-2 rounded-full text-sm font-medium hover:bg-fog transition">Resources</a>
               <a href="https://docs.notificationhub.space/introduction" className="px-3 py-2 rounded-full text-sm font-medium hover:bg-fog transition">Developers</a>
             </div>
             <div className="flex items-center gap-2">

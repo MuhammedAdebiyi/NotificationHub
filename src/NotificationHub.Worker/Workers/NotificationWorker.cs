@@ -141,19 +141,26 @@ public class NotificationWorker : BackgroundService
     // set back into the working queue. Cheap no-op when nothing is due.
     private async Task PromoteDueRetriesAsync(CancellationToken stoppingToken)
     {
-        var db = _redis.GetDatabase();
-        var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-
-        var result = await db.ScriptEvaluateAsync(
-            PromoteDueScript,
-            keys: new RedisKey[] { RetryScheduleKey, QueueKey },
-            values: new RedisValue[] { nowUnix });
-
-        var promoted = (int)result;
-
-        if (promoted > 0)
+        try
         {
-            _logger.LogDebug("Promoted {Count} due retries into the queue", promoted);
+            var db = _redis.GetDatabase();
+            var nowUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+
+            var result = await db.ScriptEvaluateAsync(
+                PromoteDueScript,
+                keys: new RedisKey[] { RetryScheduleKey, QueueKey },
+                values: new RedisValue[] { nowUnix });
+
+            var promoted = (int)result;
+
+            if (promoted > 0)
+            {
+                _logger.LogDebug("Promoted {Count} due retries into the queue", promoted);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Redis unavailable for retry promotion — skipping this cycle");
         }
     }
 
@@ -163,33 +170,41 @@ public class NotificationWorker : BackgroundService
     // concurrently, gated by the semaphore. Returns how many were dequeued.
     private async Task<int> ProcessBatchAsync(CancellationToken stoppingToken)
     {
-        var db = _redis.GetDatabase();
-
-        var values = await db.ListRightPopAsync(QueueKey, MaxConcurrency);
-
-        if (values is null || values.Length == 0)
+        try
         {
-            return 0;
-        }
+            var db = _redis.GetDatabase();
 
-        var tasks = new List<Task>(values.Length);
+            var values = await db.ListRightPopAsync(QueueKey, MaxConcurrency);
 
-        foreach (var value in values)
-        {
-            if (!Guid.TryParse((string?)value, out var notificationId))
+            if (values is null || values.Length == 0)
             {
-                _logger.LogWarning("Invalid notification ID in queue: {Value}", (string?)value);
-                continue;
+                return 0;
             }
 
-            await _semaphore.WaitAsync(stoppingToken);
+            var tasks = new List<Task>(values.Length);
 
-            tasks.Add(ProcessOneGuardedAsync(notificationId, stoppingToken));
+            foreach (var value in values)
+            {
+                if (!Guid.TryParse((string?)value, out var notificationId))
+                {
+                    _logger.LogWarning("Invalid notification ID in queue: {Value}", (string?)value);
+                    continue;
+                }
+
+                await _semaphore.WaitAsync(stoppingToken);
+
+                tasks.Add(ProcessOneGuardedAsync(notificationId, stoppingToken));
+            }
+
+            await Task.WhenAll(tasks);
+
+            return values.Length;
         }
-
-        await Task.WhenAll(tasks);
-
-        return values.Length;
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Redis unavailable for batch processing — skipping this cycle");
+            return 0;
+        }
     }
 
     // Wraps ProcessOneAsync with the semaphore release + top-level exception
@@ -284,13 +299,20 @@ public class NotificationWorker : BackgroundService
             notification.ScheduleRetry(dueAt, "Provider delivery failed");
             await repository.SaveChangesAsync(stoppingToken);
 
-            var db = _redis.GetDatabase();
-            var dueUnix = new DateTimeOffset(dueAt, TimeSpan.Zero).ToUnixTimeSeconds();
+            try
+            {
+                var db = _redis.GetDatabase();
+                var dueUnix = new DateTimeOffset(dueAt, TimeSpan.Zero).ToUnixTimeSeconds();
 
-            await db.SortedSetAddAsync(
-                RetryScheduleKey,
-                notification.Id.ToString(),
-                dueUnix);
+                await db.SortedSetAddAsync(
+                    RetryScheduleKey,
+                    notification.Id.ToString(),
+                    dueUnix);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Redis unavailable for retry scheduling — notification {Id} will retry on next cycle", notification.Id);
+            }
 
             _logger.LogWarning(
                 "Notification {Id} failed, scheduled retry at {DueAt:o} in {Delay}s (attempt {Attempt})",
@@ -315,8 +337,15 @@ public class NotificationWorker : BackgroundService
 
         await repository.SaveChangesAsync(stoppingToken);
 
-        var db = _redis.GetDatabase();
-        await db.ListLeftPushAsync(DlqKey, notification.Id.ToString());
+        try
+        {
+            var db = _redis.GetDatabase();
+            await db.ListLeftPushAsync(DlqKey, notification.Id.ToString());
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Redis unavailable for DLQ push — notification {Id} is marked DLQ in DB", notification.Id);
+        }
 
         _logger.LogError(
             "Notification {Id} moved to DLQ — {Reason} (after {Attempts} attempt(s))",
