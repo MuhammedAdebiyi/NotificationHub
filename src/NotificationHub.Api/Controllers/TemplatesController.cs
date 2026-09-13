@@ -7,6 +7,9 @@ using NotificationHub.Shared.Abstractions;
 
 namespace NotificationHub.Api.Controllers;
 
+/// <summary>
+/// Create and manage reusable email templates with variable placeholders.
+/// </summary>
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/templates")]
@@ -24,7 +27,14 @@ public class TemplatesController : ControllerBase
         _currentUser = currentUser;
     }
 
+    /// <summary>
+    /// List all templates for your organization.
+    /// </summary>
+    /// <param name="page">Page number (default: 1)</param>
+    /// <param name="pageSize">Items per page (default: 20)</param>
+    /// <returns>Paginated list of templates</returns>
     [HttpGet]
+    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -45,7 +55,14 @@ public class TemplatesController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Get a template by ID, including its body content.
+    /// </summary>
+    /// <param name="id">Template ID</param>
+    /// <returns>Full template detail</returns>
     [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> GetById(Guid id, CancellationToken cancellationToken)
     {
         if (_currentOrg.OrganizationId is null)
@@ -59,7 +76,13 @@ public class TemplatesController : ControllerBase
         return Ok(new { template.Id, template.Name, template.Subject, template.Body, template.CreatedAt });
     }
 
+    /// <summary>
+    /// Create a new email template.
+    /// </summary>
+    /// <param name="request">Template details (name, subject, body)</param>
+    /// <returns>Created template ID and name</returns>
     [HttpPost]
+    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> Create(
         [FromBody] TemplateRequest request,
         CancellationToken cancellationToken)
@@ -85,7 +108,15 @@ public class TemplatesController : ControllerBase
         return Ok(new { template.Id, template.Name });
     }
 
+    /// <summary>
+    /// Update an existing template.
+    /// </summary>
+    /// <param name="id">Template ID</param>
+    /// <param name="request">Updated template details</param>
+    /// <returns>Updated template ID and name</returns>
     [HttpPut("{id:guid}")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> Update(
         Guid id,
         [FromBody] TemplateRequest request,
@@ -108,7 +139,14 @@ public class TemplatesController : ControllerBase
         return Ok(new { template.Id, template.Name });
     }
 
+    /// <summary>
+    /// Delete a template.
+    /// </summary>
+    /// <param name="id">Template ID</param>
+    /// <returns>Deletion confirmation</returns>
     [HttpDelete("{id:guid}")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
     {
         if (_currentOrg.OrganizationId is null)
@@ -120,4 +158,14 @@ public class TemplatesController : ControllerBase
     }
 }
 
-public record TemplateRequest(string Name, string Subject, string Body);
+/// <summary>
+/// Request body for creating or updating a template.
+/// </summary>
+public record TemplateRequest(
+    /// <summary>Template name (e.g. "Welcome Email")</summary>
+    string Name,
+    /// <summary>Email subject line (supports {{variable}} placeholders)</summary>
+    string Subject,
+    /// <summary>Email body HTML (supports {{variable}} placeholders)</summary>
+    string Body
+);

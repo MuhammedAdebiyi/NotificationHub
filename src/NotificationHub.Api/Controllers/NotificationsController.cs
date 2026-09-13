@@ -9,6 +9,9 @@ using NotificationHub.Shared.Abstractions;
 
 namespace NotificationHub.Api.Controllers;
 
+/// <summary>
+/// Send and manage email notifications.
+/// </summary>
 [ApiController]
 [ApiVersion("1.0")]
 [Route("api/v{version:apiVersion}/notifications")]
@@ -32,7 +35,36 @@ public class NotificationsController : ControllerBase
         _notificationService = notificationService;
     }
 
+    /// <summary>
+    /// Send a new notification (email, SMS, push, or in-app).
+    /// </summary>
+    /// <remarks>
+    /// Authenticates via API key (`X-Api-Key`) or JWT Bearer token.
+    /// 
+    /// Example payload for an email notification:
+    /// ```
+    /// {
+    ///   "recipientEmail": "user@example.com",
+    ///   "type": "transactional",
+    ///   "channel": "email",
+    ///   "payload": "{\"subject\":\"Welcome!\",\"html\":\"&lt;h1&gt;Hello&lt;/h1&gt;\"}"
+    /// }
+    /// ```
+    /// 
+    /// The `payload` field is a JSON string containing provider-specific fields:
+    /// - For email: `subject`, `html` (or `text`)
+    /// - The `type` field is a free-form string (e.g. "transactional", "marketing", "alert")
+    /// 
+    /// Use the optional `Idempotency-Key` header to prevent duplicate sends.
+    /// </remarks>
+    /// <param name="request">Notification details</param>
+    /// <param name="idempotencyKey">Optional idempotency key to prevent duplicate sends</param>
+    /// <returns>The public ID of the created notification</returns>
+    /// <response code="200">Notification created and queued for delivery</response>
+    /// <response code="409">Duplicate request (idempotency key already used)</response>
     [HttpPost]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 409)]
     public async Task<IActionResult> Create(
         [FromBody] CreateNotificationRequest request,
         [FromHeader(Name = "Idempotency-Key")] string? idempotencyKey,
@@ -61,7 +93,17 @@ public class NotificationsController : ControllerBase
         return Ok(new { publicId = result.Value });
     }
 
+    /// <summary>
+    /// List notifications with optional filtering and pagination.
+    /// </summary>
+    /// <param name="page">Page number (default: 1)</param>
+    /// <param name="pageSize">Items per page (1-100, default: 20)</param>
+    /// <param name="dateFrom">Filter notifications created after this date</param>
+    /// <param name="dateTo">Filter notifications created before this date</param>
+    /// <param name="status">Filter by status: Pending, Processing, Sent, Failed, Retrying, DeadLetter</param>
+    /// <returns>Paginated list of notifications</returns>
     [HttpGet]
+    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> GetAll(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 20,
@@ -89,7 +131,14 @@ public class NotificationsController : ControllerBase
         });
     }
 
+    /// <summary>
+    /// Get detailed information about a specific notification.
+    /// </summary>
+    /// <param name="publicId">The notification's public ID</param>
+    /// <returns>Full notification detail including delivery logs</returns>
     [HttpGet("{publicId:guid}")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(404)]
     public async Task<IActionResult> GetById(
         Guid publicId,
         CancellationToken cancellationToken)
@@ -106,7 +155,13 @@ public class NotificationsController : ControllerBase
         return Ok(detail);
     }
 
+    /// <summary>
+    /// Get delivery logs for a specific notification.
+    /// </summary>
+    /// <param name="publicId">The notification's public ID</param>
+    /// <returns>List of delivery log entries</returns>
     [HttpGet("{publicId:guid}/logs")]
+    [ProducesResponseType(typeof(object), 200)]
     public async Task<IActionResult> GetLogs(
         Guid publicId,
         CancellationToken cancellationToken)
@@ -120,7 +175,14 @@ public class NotificationsController : ControllerBase
         return Ok(logs);
     }
 
+    /// <summary>
+    /// Retry a failed notification.
+    /// </summary>
+    /// <param name="publicId">The notification's public ID</param>
+    /// <returns>Confirmation of retry</returns>
     [HttpPost("{publicId:guid}/retry")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 400)]
     public async Task<IActionResult> Retry(
         Guid publicId,
         CancellationToken cancellationToken)
@@ -138,9 +200,16 @@ public class NotificationsController : ControllerBase
     }
 }
 
+/// <summary>
+/// Request body for creating a notification.
+/// </summary>
 public record CreateNotificationRequest(
+    /// <summary>Recipient email address</summary>
     string RecipientEmail,
+    /// <summary>Notification type (e.g. "transactional", "marketing", "alert")</summary>
     string Type,
+    /// <summary>Delivery channel: Email, Sms, Push, or InApp</summary>
     NotificationHub.Domain.Enums.NotificationChannel Channel,
+    /// <summary>JSON string with provider-specific payload. For email: {"subject":"...", "html":"...", "text":"..."}</summary>
     string Payload
 );

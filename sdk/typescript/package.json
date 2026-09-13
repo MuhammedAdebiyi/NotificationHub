@@ -1,0 +1,38 @@
+{
+  "name": "@notificationhub/sdk",
+  "version": "1.0.0",
+  "description": "Official TypeScript SDK for NotificationHub — multi-provider email notification platform",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "notification",
+    "email",
+    "transactional",
+    "campaign",
+    "api",
+    "sdk"
+  ],
+  "author": "NotificationHub",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MuhammedAdebiyi/NotificationHub"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}
