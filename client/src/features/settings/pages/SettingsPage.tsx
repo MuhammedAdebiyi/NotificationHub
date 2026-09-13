@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { apiClient } from '@/shared/services/apiClient'
@@ -135,6 +135,7 @@ export default function SettingsPage() {
   const [newKeyEnv, setNewKeyEnv] = useState<'production' | 'test'>('production')
   const [creating, setCreating] = useState(false)
   const [newKeyValue, setNewKeyValue] = useState<string | null>(null)
+  const keyBannerRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [revokeTarget, setRevokeTarget] = useState<ApiKey | null>(null)
 
@@ -252,16 +253,15 @@ export default function SettingsPage() {
         '/api/v1/org/api-keys',
         { name: newKeyName, environment: newKeyEnv }
       )
-      console.log('[APIKey] POST response:', JSON.stringify(res))
       if (!res?.key) {
-        console.error('[APIKey] Missing key in response:', res)
-        setError('API key was created but the value could not be retrieved. Check the console for details.')
+        setError('API key was created but the value could not be retrieved. Please refresh the page.')
         await load()
         return
       }
       setNewKeyValue(res.key)
       setNewKeyName('')
       await load()
+      setTimeout(() => keyBannerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 100)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create key.')
     } finally {
@@ -441,7 +441,7 @@ export default function SettingsPage() {
       <div className="max-w-2xl space-y-8">
         {/* New key revealed — copy once banner */}
         {newKeyValue && (
-          <div className="bg-teal/10 border border-teal/30 rounded-xl p-5">
+          <div ref={keyBannerRef} className="bg-teal/10 border border-teal/30 rounded-xl p-5">
             <p className="text-sm font-semibold text-teal mb-1">
               ✓ API key created
             </p>
