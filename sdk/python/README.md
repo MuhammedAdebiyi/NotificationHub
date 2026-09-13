@@ -1,116 +1,42 @@
 # NotificationHub Python SDK
 
-Official Python SDK for [NotificationHub](https://notificationhub.space) — multi-provider email notification platform.
+Official Python SDK for NotificationHub — multi-provider email notification platform
 
 ## Installation
 
 ```bash
-pip install notificationhub
+pip install notificationhub-sdk
 ```
 
 ## Quick Start
 
 ```python
-from notificationhub import NotificationHub
+from notificationhub import NotificationHubClient
 
-nh = NotificationHub(api_key="nhub_live_your_api_key_here")
-
-# Send an email notification
-result = nh.send(
-    recipient_email="user@example.com",
-    type="transactional",
-    channel="email",
-    payload={"subject": "Welcome!", "html": "<h1>Welcome to our app</h1>"},
-)
-print(f"Notification sent: {result['publicId']}")
-
-# Check delivery status
-notification = nh.get_notification(result["publicId"])
-print(f"Status: {notification['status']}")
-```
-
-## API Reference
-
-### Notifications
-
-#### `nh.send(...)`
-
-```python
-result = nh.send(
-    recipient_email="user@example.com",
-    type="transactional",
-    channel="email",
-    payload={"subject": "Hello", "html": "<p>Hello!</p>"},
-    idempotency_key="unique-id-123",  # optional, prevents duplicates
-)
-```
-
-#### `nh.get_notification(public_id)`
-
-Get full notification detail including delivery logs.
-
-#### `nh.list_notifications(page=1, page_size=20, status="sent", date_from="2024-01-01")`
-
-List notifications with filtering.
-
-#### `nh.retry_notification(public_id)`
-
-Retry a failed notification.
-
-### Templates
-
-```python
-# Create a template with {{variable}} placeholders
-template = nh.create_template(
-    name="Welcome Email",
-    subject="Welcome {{name}}!",
-    body="<h1>Hello {{name}}</h1><p>Your account is ready.</p>",
+client = NotificationHubClient(
+    api_key="your-api-key",
+    base_url="https://api.notificationhub.space",
 )
 
-# Use the template ID in notifications
-nh.send(
-    recipient_email="user@example.com",
-    type="transactional",
-    channel="email",
-    payload=template["id"],  # reference template by ID
-)
-```
-
-### Campaigns
-
-```python
-# Create and send a bulk campaign
-campaign = nh.create_campaign(
-    title="Product Launch",
-    subject="Introducing our new product",
-    body="<h1>New Product</h1>",
+result = client.notifications.send(
+    to="user@example.com",
+    template_id="welcome-email",
+    variables={
+        "name": "John Doe",
+        "login_url": "https://app.example.com/login",
+    },
 )
 
-# Add recipients
-nh.add_campaign_recipients(campaign["id"], [
-    "alice@example.com",
-    "bob@example.com",
-])
-
-# Send immediately
-nh.send_campaign(campaign["id"])
-
-# Or check progress
-progress = nh.get_campaign_progress(campaign["id"])
-print(f"{progress['progressPercent']}% sent")
+print(f"Notification sent: {result.id}")
 ```
 
-## Error Handling
+## Features
 
-```python
-from notificationhub import NotificationHub, NotificationHubError
+- Send notifications
+- Retry failed notifications
+- Create/list/delete templates
+- Campaign progress & send
 
-try:
-    nh.send(...)
-except NotificationHubError as e:
-    print(f"API error {e.status_code}: {e.message}")
-```
+## Links
 
-## License
-
-MIT
+[API Docs](https://notificationhub.space/docs) | [Swagger Explorer](https://api.notificationhub.space/docs)

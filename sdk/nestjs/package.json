@@ -1,0 +1,21 @@
+{
+  "name": "@notificationhub/nestjs",
+  "version": "1.0.0",
+  "description": "Official NestJS SDK for NotificationHub — multi-provider email notification platform",
+  "main": "dist/client.js",
+  "types": "dist/client.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": ["notification", "email", "nest", "nestjs", "notificationhub"],
+  "license": "MIT",
+  "files": ["dist", "README.md"],
+  "peerDependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

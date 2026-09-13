@@ -1,0 +1,191 @@
+/* NotificationHub brand colors + design tokens */
+:root {
+  /* Brand */
+  --vp-c-brand-1: #9333ea;
+  --vp-c-brand-2: #7e22ce;
+  --vp-c-brand-3: #6b21a8;
+  --vp-c-brand-soft: rgba(147, 51, 234, 0.14);
+
+  /* Typography */
+  --vp-font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --vp-font-family-mono: 'SF Mono', 'Fira Code', 'Fira Mono', Menlo, Consolas, monospace;
+
+  /* Layout */
+  --vp-layout-max-width: 900px;
+
+  /* Sidebar */
+  --vp-sidebar-bg-color: #fafafa;
+
+  /* Nav */
+  --vp-nav-bg-color: rgba(255, 255, 255, 0.85);
+}
+
+/* Handwritten accent for headings */
+.vp-doc h1,
+.vp-doc h2,
+.vp-doc h3 {
+  font-family: 'Caveat', 'Segoe Script', 'Comic Sans MS', cursive;
+  font-weight: 700;
+}
+
+.vp-doc h1 {
+  font-size: 2.2em;
+  color: #1a1a1a;
+  margin-bottom: 0.5em;
+}
+
+.vp-doc h2 {
+  font-size: 1.6em;
+  color: #9333ea;
+  border-top: none;
+  padding-top: 0;
+  margin-top: 2em;
+}
+
+.vp-doc h3 {
+  font-size: 1.2em;
+  color: #1a1a1a;
+}
+
+/* Code blocks - dark terminal style */
+.vp-doc div[class*='language-'] {
+  background: #1a1a1a !important;
+  border-radius: 12px;
+  border: 1px solid rgba(147, 51, 234, 0.2);
+}
+
+.vp-doc div[class*='language-'] code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* Inline code */
+.vp-doc :not(pre) > code {
+  background: rgba(147, 51, 234, 0.1);
+  color: #9333ea;
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-weight: 600;
+}
+
+/* Buttons */
+.vp-button.brand {
+  background: #9333ea !important;
+  border-color: #9333ea !important;
+  border-radius: 9999px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.vp-button.brand:hover {
+  background: #7e22ce !important;
+  border-color: #7e22ce !important;
+  transform: translateY(-1px);
+}
+
+/* Hero section on homepage */
+.VPHero .VPImage {
+  border-radius: 16px;
+}
+
+.VPHero .name {
+  font-family: 'Caveat', 'Segoe Script', 'Comic Sans MS', cursive;
+}
+
+.VPHero .tagline {
+  font-size: 1.1em;
+  color: #4a4a4a;
+}
+
+/* Feature cards */
+.VPFeature {
+  border-radius: 16px !important;
+  border: 1px solid rgba(147, 51, 234, 0.15) !important;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.VPFeature:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(147, 51, 234, 0.12);
+}
+
+/* Sidebar active link */
+.VPSidebarItem.is-active > .item > .indicator {
+  background: #9333ea !important;
+}
+
+/* Navbar */
+.VPNavBar .title {
+  font-family: 'Caveat', 'Segoe Script', 'Comic Sans MS', cursive;
+  font-weight: 800;
+  font-size: 1.3em;
+}
+
+/* Tables */
+.vp-doc table {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(147, 51, 234, 0.1);
+}
+
+.vp-doc tr:nth-child(2n) {
+  background: rgba(147, 51, 234, 0.04);
+}
+
+.vp-doc th {
+  background: rgba(147, 51, 234, 0.08);
+  font-weight: 600;
+  color: #9333ea;
+}
+
+/* Tip / Warning boxes */
+.vp-doc .custom-block.tip {
+  border-color: #9333ea;
+  background: rgba(147, 51, 234, 0.06);
+}
+
+.vp-doc .custom-block.warning {
+  border-color: #f59e0b;
+}
+
+/* Footer */
+.VPFooter {
+  border-top: 1px solid rgba(147, 51, 234, 0.1);
+}
+
+/* Footer copyright */
+.VPFooter .copyright {
+  color: #9333ea;
+}
+
+/* Sidebar item hover */
+.VPSidebarItem .item:hover {
+  color: #9333ea;
+}
+
+/* Content max width */
+.vp-doc {
+  max-width: 800px;
+}
+
+/* Better link styling */
+.vp-doc a {
+  color: #9333ea;
+  text-decoration-color: rgba(147, 51, 234, 0.3);
+}
+
+.vp-doc a:hover {
+  text-decoration-color: #9333ea;
+}
+
+/* Badge styling */
+.badge {
+  background: rgba(147, 51, 234, 0.1);
+  color: #9333ea;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+/* Import handwritten font */
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&display=swap');

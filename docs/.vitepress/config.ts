@@ -26,18 +26,9 @@ export default defineConfig({
         ],
       },
       {
-        text: 'API Reference',
-        items: [
-          { text: 'Overview', link: '/api/' },
-          { text: 'Notifications', link: '/api/notifications' },
-          { text: 'Templates', link: '/api/templates' },
-          { text: 'Campaigns', link: '/api/campaigns' },
-          { text: 'Interactive API Explorer', link: 'https://api.notificationhub.space/docs' },
-        ],
-      },
-      {
         text: 'Guides',
         items: [
+          { text: 'Integration Guide', link: '/guide/integration' },
           { text: 'Email Templates', link: '/guide/templates' },
           { text: 'Campaigns', link: '/guide/campaigns' },
           { text: 'Multi-Provider Fallback', link: '/guide/providers' },
@@ -45,10 +36,25 @@ export default defineConfig({
         ],
       },
       {
+        text: 'API Reference',
+        items: [
+          { text: 'Overview', link: '/api/' },
+          { text: 'Notifications', link: '/api/notifications' },
+          { text: 'Templates', link: '/api/templates' },
+          { text: 'Campaigns', link: '/api/campaigns' },
+          { text: 'cURL Examples', link: '/api/curl' },
+          { text: 'Swagger Explorer', link: 'https://api.notificationhub.space/docs' },
+        ],
+      },
+      {
         text: 'SDKs',
         items: [
           { text: 'TypeScript / JavaScript', link: '/sdk/typescript' },
           { text: 'Python', link: '/sdk/python' },
+          { text: 'Go', link: '/sdk/go' },
+          { text: 'C#', link: '/sdk/csharp' },
+          { text: 'NestJS', link: '/sdk/nestjs' },
+          { text: 'PHP', link: '/sdk/php' },
           { text: 'cURL Examples', link: '/api/curl' },
         ],
       },
