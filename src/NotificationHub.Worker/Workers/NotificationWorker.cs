@@ -264,7 +264,7 @@ public class NotificationWorker : BackgroundService
         if (success)
         {
             notification.MarkDelivered(
-                provider.GetType().Name,
+                provider.LastProviderType ?? "Unknown",
                 string.Empty
             );
 

@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Application.Features.Notifications.Commands.CreateNotification;
 using NotificationHub.Application.Features.Notifications.Queries.GetNotifications;
+using NotificationHub.Infrastructure.Persistence;
 using NotificationHub.Shared.Abstractions;
+using Microsoft.EntityFrameworkCore;
 
 namespace NotificationHub.Api.Controllers;
 
@@ -22,17 +24,20 @@ public class NotificationsController : ControllerBase
     private readonly ICurrentOrganization _currentOrg;
     private readonly ICurrentUser _currentUser;
     private readonly INotificationService _notificationService;
+    private readonly AppDbContext _context;
 
     public NotificationsController(
         IMediator mediator,
         ICurrentOrganization currentOrg,
         ICurrentUser currentUser,
-        INotificationService notificationService)
+        INotificationService notificationService,
+        AppDbContext context)
     {
         _mediator = mediator;
         _currentOrg = currentOrg;
         _currentUser = currentUser;
         _notificationService = notificationService;
+        _context = context;
     }
 
     /// <summary>
@@ -91,6 +96,51 @@ public class NotificationsController : ControllerBase
             return Conflict(new { error = result.Error });
 
         return Ok(new { publicId = result.Value });
+    }
+
+    [HttpGet("logs")]
+    public async Task<IActionResult> GetLogs(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? status = null,
+        [FromQuery] string? provider = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_currentOrg.IsAuthenticated || _currentOrg.OrganizationId is null)
+            return Unauthorized(new { error = "No organization context." });
+
+        var query = _context.NotificationLogs
+            .Where(l => l.OrganizationId == _currentOrg.OrganizationId.Value);
+
+        if (!string.IsNullOrEmpty(status))
+        {
+            if (Enum.TryParse<NotificationHub.Domain.Enums.NotificationStatus>(status, ignoreCase: true, out var parsedStatus))
+                query = query.Where(l => l.Notification.Status == parsedStatus);
+        }
+        if (!string.IsNullOrEmpty(provider))
+            query = query.Where(l => l.Provider == provider);
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var logs = await query
+            .OrderByDescending(l => l.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(l => new
+            {
+                l.Id,
+                l.NotificationId,
+                notificationPublicId = l.Notification.PublicId,
+                l.Notification.RecipientEmail,
+                l.Notification.Status,
+                l.Provider,
+                l.Response,
+                l.IsSuccess,
+                l.CreatedAt,
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(new { items = logs, totalCount = total, pageNumber = page, pageSize });
     }
 
     /// <summary>

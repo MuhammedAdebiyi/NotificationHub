@@ -97,6 +97,10 @@ public static class InfrastructureServiceExtensions
             ConnectionMultiplexer.Connect(redisConnection));
         services.AddScoped<INotificationQueue, RedisNotificationQueue>();
 
+        // Webhooks
+        services.AddHttpClient();
+        services.AddScoped<WebhookService>();
+
         return services;
     }
 

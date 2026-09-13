@@ -18,6 +18,8 @@ public class StubNotificationProvider : INotificationProvider
     private readonly ILogger<StubNotificationProvider> _logger;
     private readonly AppDbContext _context;
 
+    public string? LastProviderType { get; private set; }
+
     public StubNotificationProvider(
         IEmailProviderFactory emailProviderFactory,
         ILogger<StubNotificationProvider> logger,
@@ -61,7 +63,7 @@ public class StubNotificationProvider : INotificationProvider
         catch (Exception ex)
         {
             _logger.LogError(ex, "Provider failed for notification {Id}", notification.Id);
-            await WriteLogAsync(notification, "Resend", $"error: {ex.Message}", isSuccess: false, cancellationToken);
+            await WriteLogAsync(notification, "Unknown", $"error: {ex.Message}", isSuccess: false, cancellationToken);
             return false;
         }
     }
@@ -107,14 +109,16 @@ public class StubNotificationProvider : INotificationProvider
 
         var emailProvider = await _emailProviderFactory.GetProviderAsync(notification.OrganizationId, cancellationToken);
         var emailId = await emailProvider.SendAsync(message, cancellationToken);
+        var providerName = emailProvider.ProviderType;
+        LastProviderType = providerName;
 
         _logger.LogInformation(
-            "Email sent via Resend for notification {Id} to {To} from {From}",
-            notification.Id, to, from);
+            "Email sent via {Provider} for notification {Id} to {To} from {From}",
+            providerName, notification.Id, to, from);
 
         await WriteLogAsync(
             notification,
-            "Resend",
+            providerName,
             $"accepted: id={emailId}",
             isSuccess: true,
             cancellationToken);

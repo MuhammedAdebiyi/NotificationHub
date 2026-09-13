@@ -8,6 +8,7 @@ public class ApiKey : AuditableEntity
     public string Name { get; set; } = string.Empty;
     public string KeyHash { get; set; } = string.Empty;
     public string KeyPrefix { get; set; } = string.Empty;
+    public string Environment { get; set; } = "production";
     public bool IsActive { get; set; } = true;
     public DateTime? LastUsedAt { get; set; }
 

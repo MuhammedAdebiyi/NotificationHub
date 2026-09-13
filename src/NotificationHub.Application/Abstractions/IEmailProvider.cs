@@ -2,6 +2,7 @@ namespace NotificationHub.Application.Abstractions;
 
 public interface IEmailProvider
 {
+    string ProviderType { get; }
     Task<string> SendAsync(EmailMessage message, CancellationToken cancellationToken = default);
 }
 

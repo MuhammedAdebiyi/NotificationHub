@@ -11,6 +11,7 @@ namespace NotificationHub.Infrastructure.Email.Providers;
 /// </summary>
 public class SmtpAdapter : IEmailProvider
 {
+    public string ProviderType => "Smtp";
     private readonly string _host;
     private readonly int _port;
     private readonly string _username;

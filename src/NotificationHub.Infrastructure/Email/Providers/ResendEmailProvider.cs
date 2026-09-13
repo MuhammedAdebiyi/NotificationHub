@@ -9,6 +9,7 @@ namespace NotificationHub.Infrastructure.Email.Providers;
 
 public class ResendEmailProvider : IEmailProvider
 {
+    public string ProviderType => "Resend";
     private readonly HttpClient _http;
     private readonly ILogger<ResendEmailProvider> _logger;
     private const string Endpoint = "https://api.resend.com/emails";

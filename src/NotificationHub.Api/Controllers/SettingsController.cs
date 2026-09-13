@@ -50,6 +50,7 @@ public class SettingsController : ControllerBase
                 k.Id,
                 k.Name,
                 k.KeyPrefix,
+                k.Environment,
                 k.IsActive,
                 k.CreatedAt,
                 k.LastUsedAt,
@@ -68,16 +69,18 @@ public class SettingsController : ControllerBase
         if (_currentOrg.Role == "member" || _currentOrg.Role == "revoked")
             return StatusCode(403, new { error = "permission_denied" });
 
-        var plaintext = $"nhub_live_{_tokenGenerator.Generate(32)}";
+        var env = string.Equals(request.Environment, "test", StringComparison.OrdinalIgnoreCase) ? "test" : "production";
+        var prefix = env == "test" ? "nhub_test_" : "nhub_live_";
+        var plaintext = $"{prefix}{_tokenGenerator.Generate(32)}";
         var hash = ApiKeyGenerator.Hash(plaintext);
-        var prefix = ApiKeyGenerator.GetPrefix(plaintext);
 
         var apiKey = new ApiKey
         {
             OrganizationId = _currentOrg.OrganizationId.Value,
             Name = request.Name.Trim(),
             KeyHash = hash,
-            KeyPrefix = prefix,
+            KeyPrefix = ApiKeyGenerator.GetPrefix(plaintext),
+            Environment = env,
             IsActive = true,
         };
 
@@ -90,6 +93,7 @@ public class SettingsController : ControllerBase
             id = apiKey.Id,
             name = apiKey.Name,
             keyPrefix = apiKey.KeyPrefix,
+            environment = apiKey.Environment,
             createdAt = apiKey.CreatedAt,
         });
     }
@@ -117,4 +121,4 @@ public class SettingsController : ControllerBase
     }
 }
 
-public record CreateApiKeyRequest(string Name);
+public record CreateApiKeyRequest(string Name, string? Environment = null);

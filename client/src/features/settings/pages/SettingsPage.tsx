@@ -12,6 +12,7 @@ interface ApiKey {
   isActive: boolean
   createdAt: string
   lastUsedAt: string | null
+  environment: string
 }
 
 interface OrgInfo {
@@ -131,6 +132,7 @@ export default function SettingsPage() {
   const [keys, setKeys] = useState<ApiKey[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [newKeyName, setNewKeyName] = useState('')
+  const [newKeyEnv, setNewKeyEnv] = useState<'production' | 'test'>('production')
   const [creating, setCreating] = useState(false)
   const [newKeyValue, setNewKeyValue] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -246,9 +248,9 @@ export default function SettingsPage() {
     setCreating(true)
     setError(null)
     try {
-      const res = await apiClient.post<{ key: string; id: string; name: string; keyPrefix: string; createdAt: string }>(
+      const res = await apiClient.post<{ key: string; id: string; name: string; keyPrefix: string; createdAt: string; environment: string }>(
         '/api/v1/org/api-keys',
-        { name: newKeyName }
+        { name: newKeyName, environment: newKeyEnv }
       )
       setNewKeyValue(res.key)
       setNewKeyName('')
@@ -740,6 +742,20 @@ export default function SettingsPage() {
               {creating ? 'Creating...' : '+ Create'}
             </button>
           </div>
+          <div className="flex gap-2 mb-3">
+            <button
+              onClick={() => setNewKeyEnv('production')}
+              className={`text-xs px-3 py-1.5 rounded-lg transition ${newKeyEnv === 'production' ? 'bg-violet text-white' : 'border border-ink/20 text-ink/60 hover:bg-fog'}`}
+            >
+              Production
+            </button>
+            <button
+              onClick={() => setNewKeyEnv('test')}
+              className={`text-xs px-3 py-1.5 rounded-lg transition ${newKeyEnv === 'test' ? 'bg-teal text-white' : 'border border-ink/20 text-ink/60 hover:bg-fog'}`}
+            >
+              Test
+            </button>
+          </div>
 
           {error && (
             <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-xl mb-4">
@@ -760,7 +776,9 @@ export default function SettingsPage() {
               {keys.map(k => (
                 <div key={k.id} className="flex items-center justify-between py-3.5">
                   <div>
-                    <p className="text-sm font-medium">{k.name}</p>
+                    <p className="text-sm font-medium">{k.name} <span className={`text-xs px-2 py-0.5 rounded-full ${k.environment === 'test' ? 'bg-teal/10 text-teal' : 'bg-violet/10 text-violet'}`}>
+  {k.environment === 'test' ? 'Test' : 'Prod'}
+</span></p>
                     <p className="text-xs text-ink/40 font-mono mt-0.5">
                       {k.keyPrefix}••••••••••••••••••••••
                     </p>

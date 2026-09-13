@@ -8,6 +8,7 @@ namespace NotificationHub.Infrastructure.Email.Providers;
 
 public class BrevoAdapter : IEmailProvider, IEmailProviderDomains
 {
+    public string ProviderType => "Brevo";
     private readonly HttpClient _http;
     private readonly ILogger<BrevoAdapter> _logger;
     private const string Endpoint = "https://api.brevo.com/v3/smtp/email";

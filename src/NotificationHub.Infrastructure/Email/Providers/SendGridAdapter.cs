@@ -8,6 +8,7 @@ namespace NotificationHub.Infrastructure.Email.Providers;
 
 public class SendGridAdapter : IEmailProvider, IEmailProviderDomains
 {
+    public string ProviderType => "SendGrid";
     private readonly HttpClient _http;
     private readonly ILogger<SendGridAdapter> _logger;
     private const string Endpoint = "https://api.sendgrid.com/v3/mail/send";

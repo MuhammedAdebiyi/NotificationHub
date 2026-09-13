@@ -22,7 +22,9 @@ public class AppDbContext : DbContext
     public DbSet<CampaignRecipient> CampaignRecipients => Set<CampaignRecipient>();
     public DbSet<VerificationToken> VerificationTokens => Set<VerificationToken>();
     public DbSet<EmailProviderConfig> EmailProviderConfigs => Set<EmailProviderConfig>();
-   
+    public DbSet<Webhook> Webhooks => Set<Webhook>();
+    public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
+
 
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

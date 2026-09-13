@@ -8,6 +8,7 @@ namespace NotificationHub.Infrastructure.Email.Providers;
 
 public class SendByteAdapter : IEmailProvider, IEmailProviderDomains
 {
+    public string ProviderType => "SendByte";
     private readonly HttpClient _http;
     private readonly ILogger<SendByteAdapter> _logger;
     private const string Endpoint = "https://api.sendbyte.africa/v1/emails";
