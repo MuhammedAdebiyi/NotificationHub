@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import AppLayout from '@/app/layouts/AppLayout'
-import { apiClient } from '@/shared/api/apiClient'
+import { apiClient } from '@/shared/services/apiClient'
 
 interface LogEntry {
   id: string
