@@ -100,7 +100,16 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await db.Database.MigrateAsync();
+
+    // Suppress PendingModelChangesWarning — we apply SQL migrations manually
+    // and the EF snapshot may be ahead of __EFMigrationsHistory.
+    var pendingModelChanges = db.Database.GetPendingMigrations();
+    if (pendingModelChanges.Any())
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogWarning("Pending EF migrations detected ({Count}), skipping auto-migrate. Apply SQL migrations manually.",
+            pendingModelChanges.Count());
+    }
 }
 
 // OpenAPI + Swagger UI (always available for developers)
