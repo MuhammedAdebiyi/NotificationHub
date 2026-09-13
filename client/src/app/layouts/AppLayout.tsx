@@ -8,6 +8,9 @@ const navItems = [
   { to: '/templates', label: 'Templates' },
   { to: '/campaigns', label: 'Campaigns' },
   { to: '/analytics', label: 'Analytics' },
+  { to: '/logs', label: 'Logs' },
+  { to: '/webhooks', label: 'Webhooks' },
+  { to: '/developer-analytics', label: 'Developer Analytics' },
   { to: '/users', label: 'Team' },
   { to: '/settings', label: 'Settings' },
 ]

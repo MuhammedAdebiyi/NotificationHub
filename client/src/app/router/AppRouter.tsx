@@ -25,6 +25,9 @@ const AccessRevoked = lazy(() => import('@/pages/AccessRevoked'))
 const AcceptInvite = lazy(() => import('@/pages/AcceptInvite'))
 const NoOrganization = lazy(() => import('@/pages/NoOrganization'))
 const DataSourcesPage = lazy(() => import('@/features/datasources/pages/DataSourcesPage'))
+const Webhooks = lazy(() => import('@/pages/Webhooks'))
+const Logs = lazy(() => import('@/pages/Logs'))
+const DeveloperAnalytics = lazy(() => import('@/pages/DeveloperAnalytics'))
 const NotFoundPage = lazy(() => import('@/app/pages/NotFoundPage'))
 
 function SuspenseSpinner() {
@@ -65,6 +68,9 @@ export default function AppRouter() {
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/settings/providers/:id" element={<ProtectedRoute><ProviderDetail /></ProtectedRoute>} />
           <Route path="/settings/data-sources" element={<ProtectedRoute><DataSourcesPage /></ProtectedRoute>} />
+          <Route path="/webhooks" element={<ProtectedRoute><Webhooks /></ProtectedRoute>} />
+          <Route path="/logs" element={<ProtectedRoute><Logs /></ProtectedRoute>} />
+          <Route path="/developer-analytics" element={<ProtectedRoute><DeveloperAnalytics /></ProtectedRoute>} />
           <Route path="/verify-email" element={<VerifyEmail />} />
 
           {/* 404 catch-all */}

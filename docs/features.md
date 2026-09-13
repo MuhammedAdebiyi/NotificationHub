@@ -124,14 +124,19 @@ curl -H "X-Api-Key: nhub_live_your_key" \
 
 ## Webhooks
 
-Get notified in real-time when email status changes. Configure a webhook URL in your dashboard and NotificationHub will POST event payloads to your server.
+Get notified in real-time when email status changes. Configure one or more webhook URLs in **Settings → Webhooks** and NotificationHub will POST event payloads to your server.
 
 **Supported events:**
-- `notification.sent` — email delivered to provider
-- `notification.delivered` — email confirmed delivered
-- `notification.failed` — delivery failed
-- `notification.bounced` — email bounced
-- `notification.retrying` — automatic retry in progress
+
+| Event | Description |
+|-------|-------------|
+| `notification.sent` | Email delivered to provider |
+| `notification.delivered` | Email confirmed delivered |
+| `notification.failed` | Delivery failed |
+| `notification.bounced` | Email bounced |
+| `notification.retrying` | Automatic retry in progress |
+| `campaign.completed` | Campaign finished sending |
+| `campaign.paused` | Campaign was paused |
 
 ```json
 {
@@ -142,6 +147,58 @@ Get notified in real-time when email status changes. Configure a webhook URL in 
   "timestamp": "2026-09-13T10:30:00Z"
 }
 ```
+
+Each delivery includes an `X-NotificationHub-Signature` HMAC header for verification. Failed deliveries are retried automatically (3 attempts with exponential backoff).
+
+You can register up to 5 webhook URLs per organization, and each URL can subscribe to specific events or all events. See the [Webhooks API Reference](/api/webhooks) for the full CRUD API.
+
+## Test & Production API Keys
+
+NotificationHub supports two key scopes for safe development workflows:
+
+| Scope | Prefix | Usage |
+|-------|--------|-------|
+| **Test** | `nhub_test_` | Use during development and CI. Events are logged but emails are **not** actually delivered. |
+| **Live** | `nhub_live_` | Use in production. Real emails are sent and billed. |
+
+- **Test keys** let you validate your integration end-to-end without sending real email. All activity appears in notification logs with a `test` flag.
+- **Live keys** send real email. Use them only in production environments.
+- Keys can be created, rotated, and revoked from **Settings → API Keys** in the dashboard.
+- Pass your key via the `X-Api-Key` header on every request:
+
+```bash
+# Test key — no real emails sent
+curl -H "X-Api-Key: nhub_test_xxxxx" \
+  https://api.notificationhub.space/api/v1/notifications
+
+# Live key — real emails sent
+curl -H "X-Api-Key: nhub_live_xxxxx" \
+  https://api.notificationhub.space/api/v1/notifications
+```
+
+## Notification Logs
+
+NotificationHub records every notification attempt — whether it succeeded, failed, or was delivered to a provider. Logs are available via the dashboard and the API.
+
+### What's recorded
+
+- **Notification ID** and recipient email
+- **Status** — `Pending`, `Processing`, `Sent`, `Delivered`, `Failed`, `Retrying`, `DeadLetter`
+- **Provider** used and provider-side message ID
+- **Timestamps** — created, processed, delivered, failed
+- **Error details** — provider error code, retry count, failure reason
+- **Test flag** — whether the notification was sent with a test key
+
+### Querying logs
+
+Use the API to query and filter logs:
+
+```bash
+curl -H "X-Api-Key: nhub_live_xxxxx" \
+  "https://api.notificationhub.space/api/v1/notifications/logs?status=Failed&pageSize=50"
+```
+
+See the [Notifications API → Logs](/api/notifications#notification-logs) endpoint for full parameter and response documentation.
 
 ## Rate Limiting
 
