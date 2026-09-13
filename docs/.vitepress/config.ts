@@ -8,11 +8,11 @@ export default defineConfig({
   ],
   themeConfig: {
     logo: '/logo.svg',
-    siteTitle: 'NotificationHub',
+    siteTitle: false,
     nav: [
       { text: 'Home', link: 'https://notificationhub.space' },
-      { text: 'Features', link: 'https://notificationhub.space/#features' },
-      { text: 'Resources', link: 'https://notificationhub.space/#resources' },
+      { text: 'Features', link: '/features' },
+      { text: 'Resources', link: '/resources' },
       { text: 'Developers', link: '/introduction' },
       { text: 'Log in', link: 'https://notificationhub.space/login' },
     ],
@@ -55,15 +55,15 @@ export default defineConfig({
           { text: 'C#', link: '/sdk/csharp' },
           { text: 'NestJS', link: '/sdk/nestjs' },
           { text: 'PHP', link: '/sdk/php' },
-          { text: 'cURL Examples', link: '/api/curl' },
         ],
       },
       {
-        text: 'More',
+        text: 'Platform',
         items: [
+          { text: 'Features', link: '/features' },
+          { text: 'Resources', link: '/resources' },
           { text: 'Changelog', link: '/changelog' },
           { text: 'Community Projects', link: '/community' },
-          { text: 'Status Page', link: 'https://status.notificationhub.space' },
         ],
       },
     ],

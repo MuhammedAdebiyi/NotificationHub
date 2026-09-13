@@ -1,4 +1,9 @@
-/* NotificationHub brand colors + design tokens */
+/* Import handwritten font */
+@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&display=swap');
+
+/* ============================================
+   LIGHT MODE (default)
+   ============================================ */
 :root {
   /* Brand */
   --vp-c-brand-1: #9333ea;
@@ -13,30 +18,142 @@
   /* Layout */
   --vp-layout-max-width: 900px;
 
+  /* Nav - clean white */
+  --vp-nav-bg-color: rgba(255, 255, 255, 0.92);
+  --vp-nav-border-color: rgba(0, 0, 0, 0.06);
+
   /* Sidebar */
   --vp-sidebar-bg-color: #fafafa;
+  --vp-sidebar-border-color: rgba(0, 0, 0, 0.06);
 
-  /* Nav */
-  --vp-nav-bg-color: rgba(255, 255, 255, 0.85);
+  /* Code blocks - LIGHT in light mode */
+  --vp-code-block-bg: #f6f8fa;
+  --vp-code-block-color: #24292e;
+  --vp-code-tab-bg: #eef1f5;
+  --vp-code-tab-color: #6e7781;
+  --vp-code-tab-active-bg: #ffffff;
+  --vp-code-tab-active-color: #9333ea;
+  --vp-code-tab-hover-bg: #e9ecf0;
+
+  /* Code line numbers */
+  --vp-code-line-number-color: #bfc4c9;
+
+  /* Inline code */
+  --vp-inline-code-bg: rgba(147, 51, 234, 0.08);
+  --vp-inline-code-color: #7e22ce;
+
+  /* Content */
+  --vp-c-bg: #ffffff;
+  --vp-c-bg-soft: #f9fafb;
+  --vp-c-bg-mute: #f3f4f6;
+  --vp-c-text-1: #1a1a2e;
+  --vp-c-text-2: #4a4a5a;
+  --vp-c-text-3: #6b7280;
+  --vp-c-divider: rgba(0, 0, 0, 0.08);
+
+  /* Hero */
+  --vp-hero-name-color: transparent;
+  --vp-hero-name-background: -webkit-linear-gradient(120deg, #9333ea 30%, #6b21a8);
+
+  /* Feature cards */
+  --vp-feature-bg: #ffffff;
+  --vp-feature-border: rgba(147, 51, 234, 0.12);
+
+  /* Tip/Warning blocks */
+  --vp-custom-block-tip-bg: rgba(147, 51, 234, 0.06);
+  --vp-custom-block-tip-border: #9333ea;
 }
 
-/* Handwritten accent for headings */
+/* ============================================
+   DARK MODE
+   ============================================ */
+.dark {
+  --vp-c-brand-1: #a855f7;
+  --vp-c-brand-2: #c084fc;
+  --vp-c-brand-3: #9333ea;
+  --vp-c-brand-soft: rgba(168, 85, 247, 0.16);
+
+  /* Nav - dark */
+  --vp-nav-bg-color: rgba(15, 15, 25, 0.92);
+  --vp-nav-border-color: rgba(255, 255, 255, 0.06);
+
+  /* Sidebar - dark */
+  --vp-sidebar-bg-color: #0f0f19;
+  --vp-sidebar-border-color: rgba(255, 255, 255, 0.06);
+
+  /* Code blocks - DARK in dark mode */
+  --vp-code-block-bg: #0d1117;
+  --vp-code-block-color: #e6edf3;
+  --vp-code-tab-bg: #161b22;
+  --vp-code-tab-color: #8b949e;
+  --vp-code-tab-active-bg: #0d1117;
+  --vp-code-tab-active-color: #a855f7;
+  --vp-code-tab-hover-bg: #1c2128;
+
+  /* Code line numbers */
+  --vp-code-line-number-color: #484f58;
+
+  /* Inline code */
+  --vp-inline-code-bg: rgba(168, 85, 247, 0.16);
+  --vp-inline-code-color: #c084fc;
+
+  /* Content */
+  --vp-c-bg: #0f0f19;
+  --vp-c-bg-soft: #161625;
+  --vp-c-bg-mute: #1c1c30;
+  --vp-c-text-1: #e2e8f0;
+  --vp-c-text-2: #a0aec0;
+  --vp-c-text-3: #718096;
+  --vp-c-divider: rgba(255, 255, 255, 0.06);
+
+  /* Feature cards */
+  --vp-feature-bg: #161625;
+  --vp-feature-border: rgba(168, 85, 247, 0.15);
+
+  /* Tip/Warning blocks */
+  --vp-custom-block-tip-bg: rgba(168, 85, 247, 0.1);
+  --vp-custom-block-tip-border: #a855f7;
+}
+
+/* ============================================
+   NAVBAR
+   ============================================ */
+.VPNavBar {
+  border-bottom: 1px solid var(--vp-nav-border-color) !important;
+}
+
+.VPNavBar .title {
+  font-family: 'Caveat', cursive;
+  font-weight: 800;
+  font-size: 1.2em !important;
+  color: var(--vp-c-brand-1);
+}
+
+.VPNavBar .title-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+/* ============================================
+   HEADINGS — Caveat handwritten style
+   ============================================ */
 .vp-doc h1,
 .vp-doc h2,
 .vp-doc h3 {
-  font-family: 'Caveat', 'Segoe Script', 'Comic Sans MS', cursive;
+  font-family: 'Caveat', cursive;
   font-weight: 700;
 }
 
 .vp-doc h1 {
   font-size: 2.2em;
-  color: #1a1a1a;
+  color: var(--vp-c-text-1);
   margin-bottom: 0.5em;
 }
 
 .vp-doc h2 {
   font-size: 1.6em;
-  color: #9333ea;
+  color: var(--vp-c-brand-1);
   border-top: none;
   padding-top: 0;
   margin-top: 2em;
@@ -44,64 +161,122 @@
 
 .vp-doc h3 {
   font-size: 1.2em;
-  color: #1a1a1a;
+  color: var(--vp-c-text-1);
 }
 
-/* Code blocks - dark terminal style */
+/* ============================================
+   CODE BLOCKS — light in light, dark in dark
+   ============================================ */
 .vp-doc div[class*='language-'] {
-  background: #1a1a1a !important;
+  background: var(--vp-code-block-bg) !important;
   border-radius: 12px;
-  border: 1px solid rgba(147, 51, 234, 0.2);
+  border: 1px solid var(--vp-c-divider);
+}
+
+.dark .vp-doc div[class*='language-'] {
+  border-color: rgba(168, 85, 247, 0.15);
 }
 
 .vp-doc div[class*='language-'] code {
-  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-family: var(--vp-font-family-mono);
   font-size: 13px;
   line-height: 1.6;
+  color: var(--vp-code-block-color);
 }
 
-/* Inline code */
+/* Code tabs */
+.vp-doc .vp-code-tab {
+  background: var(--vp-code-tab-bg);
+  color: var(--vp-code-tab-color);
+}
+
+.vp-doc .vp-code-tab.active {
+  background: var(--vp-code-tab-active-bg);
+  color: var(--vp-code-tab-active-color);
+}
+
+.vp-doc .vp-code-tab:hover {
+  background: var(--vp-code-tab-hover-bg);
+}
+
+/* Line numbers */
+.vp-doc div[class*='language-'] .line-numbers {
+  color: var(--vp-code-line-number-color);
+}
+
+/* Copy button */
+.vp-doc div[class*='language-'] .copy-btn {
+  color: var(--vp-c-text-3);
+}
+
+.vp-doc div[class*='language-'] .copy-btn:hover {
+  color: var(--vp-c-brand-1);
+}
+
+/* ============================================
+   INLINE CODE
+   ============================================ */
 .vp-doc :not(pre) > code {
-  background: rgba(147, 51, 234, 0.1);
-  color: #9333ea;
+  background: var(--vp-inline-code-bg);
+  color: var(--vp-inline-code-color);
   border-radius: 6px;
   padding: 2px 6px;
   font-weight: 600;
+  font-size: 0.88em;
 }
 
-/* Buttons */
+/* ============================================
+   BUTTONS
+   ============================================ */
 .vp-button.brand {
-  background: #9333ea !important;
-  border-color: #9333ea !important;
+  background: var(--vp-c-brand-1) !important;
+  border-color: var(--vp-c-brand-1) !important;
   border-radius: 9999px;
   font-weight: 600;
   transition: all 0.2s;
 }
 
 .vp-button.brand:hover {
-  background: #7e22ce !important;
-  border-color: #7e22ce !important;
+  background: var(--vp-c-brand-2) !important;
+  border-color: var(--vp-c-brand-2) !important;
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
 }
 
-/* Hero section on homepage */
+.vp-button.alt {
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+/* ============================================
+   HERO
+   ============================================ */
 .VPHero .VPImage {
   border-radius: 16px;
 }
 
 .VPHero .name {
-  font-family: 'Caveat', 'Segoe Script', 'Comic Sans MS', cursive;
+  font-family: 'Caveat', cursive;
+  font-size: 3.2em !important;
+}
+
+.VPHero .text {
+  font-family: 'Caveat', cursive;
 }
 
 .VPHero .tagline {
   font-size: 1.1em;
-  color: #4a4a4a;
+  color: var(--vp-c-text-2);
+  line-height: 1.7;
 }
 
-/* Feature cards */
+/* ============================================
+   FEATURE CARDS
+   ============================================ */
 .VPFeature {
   border-radius: 16px !important;
-  border: 1px solid rgba(147, 51, 234, 0.15) !important;
+  border: 1px solid var(--vp-feature-border) !important;
+  background: var(--vp-feature-bg) !important;
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
@@ -110,82 +285,116 @@
   box-shadow: 0 8px 24px rgba(147, 51, 234, 0.12);
 }
 
-/* Sidebar active link */
+.dark .VPFeature:hover {
+  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.15);
+}
+
+.VPFeature .title {
+  font-family: 'Caveat', cursive;
+  font-weight: 700;
+  font-size: 1.15em;
+}
+
+/* ============================================
+   SIDEBAR
+   ============================================ */
 .VPSidebarItem.is-active > .item > .indicator {
-  background: #9333ea !important;
+  background: var(--vp-c-brand-1) !important;
 }
 
-/* Navbar */
-.VPNavBar .title {
-  font-family: 'Caveat', 'Segoe Script', 'Comic Sans MS', cursive;
-  font-weight: 800;
-  font-size: 1.3em;
+.VPSidebarItem .item {
+  border-radius: 8px;
+  transition: background 0.15s;
 }
 
-/* Tables */
+.VPSidebarItem .item:hover {
+  color: var(--vp-c-brand-1);
+  background: var(--vp-c-brand-soft);
+}
+
+/* ============================================
+   TABLES
+   ============================================ */
 .vp-doc table {
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(147, 51, 234, 0.1);
-}
-
-.vp-doc tr:nth-child(2n) {
-  background: rgba(147, 51, 234, 0.04);
+  border: 1px solid var(--vp-c-divider);
 }
 
 .vp-doc th {
-  background: rgba(147, 51, 234, 0.08);
+  background: var(--vp-c-brand-soft);
   font-weight: 600;
-  color: #9333ea;
+  color: var(--vp-c-brand-1);
 }
 
-/* Tip / Warning boxes */
+.vp-doc tr:nth-child(2n) {
+  background: var(--vp-c-bg-soft);
+}
+
+/* ============================================
+   TIP / WARNING BLOCKS
+   ============================================ */
 .vp-doc .custom-block.tip {
-  border-color: #9333ea;
-  background: rgba(147, 51, 234, 0.06);
+  border-color: var(--vp-custom-block-tip-border);
+  background: var(--vp-custom-block-tip-bg);
+  border-radius: 12px;
 }
 
 .vp-doc .custom-block.warning {
   border-color: #f59e0b;
+  border-radius: 12px;
 }
 
-/* Footer */
-.VPFooter {
-  border-top: 1px solid rgba(147, 51, 234, 0.1);
+.vp-doc .custom-block.danger {
+  border-color: #ef4444;
+  border-radius: 12px;
 }
 
-/* Footer copyright */
-.VPFooter .copyright {
-  color: #9333ea;
-}
-
-/* Sidebar item hover */
-.VPSidebarItem .item:hover {
-  color: #9333ea;
-}
-
-/* Content max width */
+/* ============================================
+   CONTENT
+   ============================================ */
 .vp-doc {
   max-width: 800px;
 }
 
-/* Better link styling */
 .vp-doc a {
-  color: #9333ea;
+  color: var(--vp-c-brand-1);
   text-decoration-color: rgba(147, 51, 234, 0.3);
 }
 
 .vp-doc a:hover {
-  text-decoration-color: #9333ea;
+  text-decoration-color: var(--vp-c-brand-1);
 }
 
-/* Badge styling */
+/* ============================================
+   FOOTER
+   ============================================ */
+.VPFooter {
+  border-top: 1px solid var(--vp-c-divider) !important;
+}
+
+.VPFooter .copyright {
+  color: var(--vp-c-brand-1);
+}
+
+/* ============================================
+   BADGES
+   ============================================ */
 .badge {
-  background: rgba(147, 51, 234, 0.1);
-  color: #9333ea;
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
   border-radius: 9999px;
   font-weight: 600;
 }
 
-/* Import handwritten font */
-@import url('https://fonts.googleapis.com/css2?family=Caveat:wght@400;500;600;700&display=swap');
+/* ============================================
+   LAYOUT - wide pages
+   ============================================ */
+.VPDoc .container {
+  max-width: 960px;
+}
+
+/* Features/Resources full-width layout */
+.VPDoc.has-sidebar .container {
+  max-width: 1100px;
+}

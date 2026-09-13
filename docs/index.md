@@ -12,7 +12,7 @@ hero:
       text: API Reference
       link: /api/
     - theme: alt
-      text: Interactive Explorer
+      text: Swagger Explorer
       link: https://api.notificationhub.space/docs
 
 features:
@@ -23,5 +23,5 @@ features:
   - title: Email Templates
     details: Reusable templates with {{variable}} placeholders. Manage via API or the visual editor.
   - title: OpenAPI + SDKs
-    details: Full OpenAPI spec with Swagger UI, plus official TypeScript and Python SDKs.
+    details: Full OpenAPI spec with Swagger UI, plus official SDKs for TypeScript, Python, Go, C#, NestJS, and PHP.
 ---
