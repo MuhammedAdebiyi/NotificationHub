@@ -252,6 +252,13 @@ export default function SettingsPage() {
         '/api/v1/org/api-keys',
         { name: newKeyName, environment: newKeyEnv }
       )
+      console.log('[APIKey] POST response:', JSON.stringify(res))
+      if (!res?.key) {
+        console.error('[APIKey] Missing key in response:', res)
+        setError('API key was created but the value could not be retrieved. Check the console for details.')
+        await load()
+        return
+      }
       setNewKeyValue(res.key)
       setNewKeyName('')
       await load()
