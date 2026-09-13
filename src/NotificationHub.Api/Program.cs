@@ -19,7 +19,8 @@ builder.Services.AddCors(options =>
                 "http://localhost:5173",
                 "https://notificationhub.space",
                 "https://www.notificationhub.space",
-                "https://notification-hub-chi.vercel.app")
+                "https://notification-hub-chi.vercel.app",
+                "https://docs.notificationhub.space")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -101,11 +102,9 @@ using (var scope = app.Services.CreateScope())
     await db.Database.MigrateAsync();
 }
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    app.MapGet("/docs", () => Results.Content(swaggerUiHtml, "text/html"));
-}
+// OpenAPI + Swagger UI (always available for developers)
+app.MapOpenApi();
+app.MapGet("/docs", () => Results.Content(swaggerUiHtml, "text/html"));
 app.MapGet("/health", async (AppDbContext db) =>
 {
     await db.Database.ExecuteSqlRawAsync("SELECT 1");
