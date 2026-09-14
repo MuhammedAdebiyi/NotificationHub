@@ -439,35 +439,6 @@ export default function SettingsPage() {
       </div>
 
       <div className="max-w-2xl space-y-8">
-        {/* New key revealed — copy once banner */}
-        {newKeyValue && (
-          <div ref={keyBannerRef} className="bg-teal/10 border border-teal/30 rounded-xl p-5">
-            <p className="text-sm font-semibold text-teal mb-1">
-              ✓ API key created
-            </p>
-            <p className="text-xs text-teal/70 mb-3">
-              Copy it now — this is the only time it will be shown.
-            </p>
-            <code className="block bg-white border border-teal/20 rounded-lg px-4 py-3 text-sm font-mono break-all select-all">
-              {newKeyValue}
-            </code>
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => navigator.clipboard.writeText(newKeyValue)}
-                className="text-xs px-3 py-1.5 bg-teal text-white rounded-lg hover:bg-teal/80 transition"
-              >
-                Copy
-              </button>
-              <button
-                onClick={() => setNewKeyValue(null)}
-                className="text-xs px-3 py-1.5 border border-teal/30 text-teal rounded-lg hover:bg-teal/10 transition"
-              >
-                Dismiss
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* Email Provider section */}
         <div className="bg-white border border-ink/10 rounded-xl p-6">
           <div className="flex items-center justify-between mb-1">
@@ -721,6 +692,35 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        {/* New key revealed — copy once banner */}
+        {newKeyValue && (
+          <div ref={keyBannerRef} className="bg-teal/10 border border-teal/30 rounded-xl p-5">
+            <p className="text-sm font-semibold text-teal mb-1">
+              ✓ API key created
+            </p>
+            <p className="text-xs text-teal/70 mb-3">
+              Copy it now — this is the only time it will be shown.
+            </p>
+            <code className="block bg-white border border-teal/20 rounded-lg px-4 py-3 text-sm font-mono break-all select-all">
+              {newKeyValue}
+            </code>
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => navigator.clipboard.writeText(newKeyValue)}
+                className="text-xs px-3 py-1.5 bg-teal text-white rounded-lg hover:bg-teal/80 transition"
+              >
+                Copy
+              </button>
+              <button
+                onClick={() => setNewKeyValue(null)}
+                className="text-xs px-3 py-1.5 border border-teal/30 text-teal rounded-lg hover:bg-teal/10 transition"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* API Keys section */}
         <div className="bg-white border border-ink/10 rounded-xl p-6">
