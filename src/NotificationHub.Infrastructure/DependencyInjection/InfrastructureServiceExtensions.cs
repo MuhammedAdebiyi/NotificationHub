@@ -100,6 +100,7 @@ public static class InfrastructureServiceExtensions
         // Webhooks
         services.AddHttpClient();
         services.AddScoped<WebhookService>();
+        services.AddScoped<IWebhookService>(sp => sp.GetRequiredService<WebhookService>());
 
         return services;
     }

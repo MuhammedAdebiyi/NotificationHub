@@ -3,12 +3,13 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using NotificationHub.Application.Abstractions;
 using NotificationHub.Domain.Entities;
 using NotificationHub.Infrastructure.Persistence;
 
 namespace NotificationHub.Infrastructure.Services;
 
-public class WebhookService
+public class WebhookService : IWebhookService
 {
     private readonly AppDbContext _context;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -57,6 +58,7 @@ public class WebhookService
             if (!string.IsNullOrEmpty(hook.Secret))
             {
                 var signature = ComputeHmac(json, hook.Secret);
+                request.Headers.Add("X-NotificationHub-Signature", signature);
                 request.Headers.Add("X-Webhook-Signature", signature);
             }
 

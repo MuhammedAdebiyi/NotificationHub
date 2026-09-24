@@ -234,6 +234,7 @@ public class NotificationWorker : BackgroundService
         await using var scope = _scopeFactory.CreateAsyncScope();
         var repository = scope.ServiceProvider.GetRequiredService<INotificationRepository>();
         var provider = scope.ServiceProvider.GetRequiredService<INotificationProvider>();
+        var webhookService = scope.ServiceProvider.GetRequiredService<IWebhookService>();
 
         var notification = await repository.GetByIdAsync(notificationId, stoppingToken);
         if (notification is null)
@@ -257,7 +258,7 @@ public class NotificationWorker : BackgroundService
         {
             // Bad payload / invalid recipient — no amount of retrying fixes this.
             // Skip the normal backoff entirely and go straight to DLQ.
-            await MoveToDeadLetterAsync(notification, ex.Message, repository, stoppingToken);
+            await MoveToDeadLetterAsync(notification, ex.Message, repository, webhookService, stoppingToken);
             return;
         }
 
@@ -273,10 +274,20 @@ public class NotificationWorker : BackgroundService
             _logger.LogInformation(
                 "Notification {Id} sent successfully",
                 notification.Id);
+
+            await DispatchSafeAsync(webhookService, "notification.sent",
+                notification.OrganizationId,
+                new
+                {
+                    publicId = notification.PublicId,
+                    recipientEmail = notification.RecipientEmail,
+                    provider = notification.Provider,
+                    sentAt = notification.ProcessedAt,
+                }, stoppingToken);
         }
         else
         {
-            await HandleFailureAsync(notification, repository, stoppingToken);
+            await HandleFailureAsync(notification, repository, webhookService, stoppingToken);
         }
     }
 
@@ -287,6 +298,7 @@ public class NotificationWorker : BackgroundService
     private async Task HandleFailureAsync(
         Notification notification,
         INotificationRepository repository,
+        IWebhookService webhookService,
         CancellationToken stoppingToken)
     {
         var nextAttempt = notification.RetryCount + 1;
@@ -320,10 +332,21 @@ public class NotificationWorker : BackgroundService
                 dueAt,
                 delay.TotalSeconds,
                 nextAttempt);
+
+            await DispatchSafeAsync(webhookService, "notification.retrying",
+                notification.OrganizationId,
+                new
+                {
+                    publicId = notification.PublicId,
+                    recipientEmail = notification.RecipientEmail,
+                    error = notification.LastError,
+                    nextRetryAt = dueAt,
+                    attempt = nextAttempt,
+                }, stoppingToken);
         }
         else
         {
-            await MoveToDeadLetterAsync(notification, "Provider delivery failed", repository, stoppingToken);
+            await MoveToDeadLetterAsync(notification, "Provider delivery failed", repository, webhookService, stoppingToken);
         }
     }
 
@@ -331,6 +354,7 @@ public class NotificationWorker : BackgroundService
         Notification notification,
         string reason,
         INotificationRepository repository,
+        IWebhookService webhookService,
         CancellationToken stoppingToken)
     {
         notification.MoveToDeadLetter(reason);
@@ -352,6 +376,34 @@ public class NotificationWorker : BackgroundService
             notification.Id,
             reason,
             notification.RetryCount);
+
+        await DispatchSafeAsync(webhookService, "notification.failed",
+            notification.OrganizationId,
+            new
+            {
+                publicId = notification.PublicId,
+                recipientEmail = notification.RecipientEmail,
+                error = reason,
+                retryCount = notification.RetryCount,
+            }, stoppingToken);
+    }
+
+    // Fire-and-forget webhook dispatch — never let a webhook failure break send processing.
+    private async Task DispatchSafeAsync(
+        IWebhookService webhookService,
+        string eventName,
+        Guid organizationId,
+        object payload,
+        CancellationToken stoppingToken)
+    {
+        try
+        {
+            await webhookService.DispatchAsync(eventName, organizationId, payload);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Webhook dispatch failed for {Event}", eventName);
+        }
     }
 
     public override void Dispose()
