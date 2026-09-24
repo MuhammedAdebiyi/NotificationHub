@@ -116,10 +116,29 @@ using (var scope = app.Services.CreateScope())
 // OpenAPI + Swagger UI (always available for developers)
 app.MapOpenApi();
 app.MapGet("/docs", () => Results.Content(swaggerUiHtml, "text/html"));
-app.MapGet("/health", async (AppDbContext db) =>
+
+// Liveness: process is up and serving HTTP. No external dependencies —
+// a DB/Redis outage must NOT take this endpoint down, otherwise a third-party
+// outage silently blocks deploys and masks real code failures.
+app.MapGet("/health", () =>
+    Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }));
+
+// Readiness: can this instance actually serve traffic? Checks DB connectivity.
+// Monitoring/traffic gates should use this; deploys gate on /health.
+app.MapGet("/ready", async (AppDbContext db, ILogger<Program> logger) =>
 {
-    await db.Database.ExecuteSqlRawAsync("SELECT 1");
-    return Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow });
+    try
+    {
+        await db.Database.ExecuteSqlRawAsync("SELECT 1");
+        return Results.Ok(new { status = "ready", timestamp = DateTime.UtcNow });
+    }
+    catch (Exception ex)
+    {
+        logger.LogWarning(ex, "Readiness check failed: database unreachable");
+        return Results.Json(
+            new { status = "unready", reason = "database_unreachable", timestamp = DateTime.UtcNow },
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
 });
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();

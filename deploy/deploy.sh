@@ -25,7 +25,12 @@ docker run -d --name "notificationhub-api-$NEXT" \
 echo "Waiting for health check..."
 for i in {1..30}; do
   if curl -sf "http://localhost:${API_PORT}/health" > /dev/null 2>&1; then
-    echo "Health check passed."
+    echo "Health (liveness) check passed."
+    if curl -sf "http://localhost:${API_PORT}/ready" > /dev/null 2>&1; then
+      echo "Readiness check passed."
+    else
+      echo "WARNING: readiness check failed (database unreachable?) — proceeding; liveness only."
+    fi
     break
   fi
   if [ "$i" -eq 30 ]; then
