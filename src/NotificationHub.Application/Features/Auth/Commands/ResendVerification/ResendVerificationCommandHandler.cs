@@ -29,7 +29,16 @@ public class ResendVerificationCommandHandler : IRequestHandler<ResendVerificati
         if (user is null || user.IsEmailVerified)
             return Result.Success();
 
-        await _mediator.Send(new SendVerificationEmailCommand(user.Id), cancellationToken);
+        try
+        {
+            await _mediator.Send(new SendVerificationEmailCommand(user.Id), cancellationToken);
+        }
+        catch
+        {
+            // Delivery failure must not change the response — otherwise the
+            // caller learns the account exists (and a provider outage would
+            // turn a UX-friendly endpoint into a 500).
+        }
 
         return Result.Success();
     }
