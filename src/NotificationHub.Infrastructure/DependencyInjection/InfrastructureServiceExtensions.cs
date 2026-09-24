@@ -80,8 +80,10 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IImportJobRepository, ImportJobRepository>();
         services.AddScoped<IImportDataReader, ImportDataReader>();
         
-        // Email provider
-        services.AddHttpClient<IEmailProvider, ResendEmailProvider>();
+        // Email provider — platform default (system emails like verification)
+        // must be SendByte: mail.notificationhub.space is verified there.
+        // Resend rejects that domain with 403 (unverified), so it cannot be the default.
+        services.AddHttpClient<IEmailProvider, SendByteEmailProvider>();
         services.AddScoped<IEmailProviderConfigRepository, EmailProviderConfigRepository>();
         services.AddScoped<IEmailProviderFactory, UserEmailProviderFactory>();
 

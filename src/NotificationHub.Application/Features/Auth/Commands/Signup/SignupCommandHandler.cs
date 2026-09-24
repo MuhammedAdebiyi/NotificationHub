@@ -70,23 +70,14 @@ public class SignupCommandHandler : IRequestHandler<SignupCommand, Result<Signup
         // 4. Persist everything
         await _userRepository.SaveChangesAsync(cancellationToken);
 
+        // 5. Fire verification email — swallowed intentionally: signup must not
+        // fail because email delivery failed.
         try
         {
             await _mediator.Send(new SendVerificationEmailCommand(user.Id), cancellationToken);
         }
         catch
         {
-            // Signup must not fail because email delivery failed.
-        }
-
-        // 6. Fire verification email — swallowed intentionally
-        try
-        {
-            await _mediator.Send(new SendVerificationEmailCommand(user.Id), cancellationToken);
-        }
-        catch
-        {
-            // Signup must not fail because email delivery failed.
             // TODO: log this once Serilog (Phase 9) is in.
         }
 
