@@ -26,6 +26,14 @@ public class VerificationTokenRepository : IVerificationTokenRepository
             .FirstOrDefaultAsync(t => t.Token == token, cancellationToken);
     }
 
+    public async Task<VerificationToken?> GetLatestForUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.VerificationTokens
+            .Where(t => t.UserId == userId)
+            .OrderByDescending(t => t.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+    }
+
     public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         await _context.SaveChangesAsync(cancellationToken);

@@ -38,6 +38,13 @@ public class SendVerificationEmailCommandHandler
         if (user is null)
             return Result<bool>.Failure("User not found.");
 
+        // Rate limit: one verification email per 60s per user. Applies to every
+        // caller (signup, login auto-resend, explicit resend endpoint) so the
+        // endpoint can't be used to spam inboxes.
+        var latest = await _tokenRepository.GetLatestForUserIdAsync(user.Id, cancellationToken);
+        if (latest is not null && _clock.UtcNow - latest.CreatedAt < TimeSpan.FromSeconds(60))
+            return Result<bool>.Success(true);
+
         var token = new VerificationToken
         {
             UserId = user.Id,

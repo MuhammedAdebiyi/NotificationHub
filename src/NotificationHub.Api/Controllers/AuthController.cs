@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Abstractions;
 using NotificationHub.Application.Features.Auth.Commands.ForgotPassword;
 using NotificationHub.Application.Features.Auth.Commands.Login;
+using NotificationHub.Application.Features.Auth.Commands.ResendVerification;
 using NotificationHub.Application.Features.Auth.Commands.ResetPassword;
 using NotificationHub.Application.Features.Auth.Commands.Signup;
 using NotificationHub.Application.Features.Auth.Commands.VerifyEmail;
@@ -173,6 +174,24 @@ public class AuthController : ControllerBase
         return Ok(new { message = "If that email exists, a reset link has been sent." });
     }
 
+    [HttpPost("resend-verification")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ResendVerification(
+        [FromBody] ResendVerificationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+            return BadRequest(new { error = "Email is required." });
+
+        // Always returns the same generic message — never reveals whether
+        // the account exists or is already verified.
+        await _mediator.Send(
+            new ResendVerificationCommand(request.Email.Trim().ToLowerInvariant()),
+            cancellationToken);
+
+        return Ok(new { message = "If that email exists and is unverified, a verification link has been sent." });
+    }
+
     [HttpPost("reset-password")]
     public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
     {
@@ -203,4 +222,5 @@ public record SignupRequest(string FullName, string Email, string Password, stri
 public record LoginRequest(string Email, string Password);
 public record SelectOrgRequest(Guid UserId, Guid OrganizationId);
 public record ForgotPasswordRequest(string Email);
+public record ResendVerificationRequest(string Email);
 public record ResetPasswordRequest(string Token, string Password, string ConfirmPassword);

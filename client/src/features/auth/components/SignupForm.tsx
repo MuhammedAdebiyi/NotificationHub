@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useSignup } from '../hooks/useSignup'
+import ResendVerification from './ResendVerification'
 
 function validatePassword(password: string): string | null {
   if (password.length < 8) return 'Password must be at least 8 characters.'
@@ -44,7 +45,18 @@ export default function SignupForm() {
       <div className="text-center py-10">
         <p className="hand text-2xl text-teal mb-2">almost there —</p>
         <h2 className="font-display font-bold text-3xl mb-3">Check your email</h2>
-        <p className="text-ink/60">We sent a verification link to <strong>{form.email}</strong></p>
+        <p className="text-ink/60 mb-6">We sent a verification link to <strong>{form.email}</strong></p>
+        <ResendVerification email={form.email} />
+        <p className="text-sm text-ink/60 mt-6">
+          Wrong email?{' '}
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="text-violet font-medium hover:underline"
+          >
+            Start over
+          </button>
+        </p>
       </div>
     )
   }

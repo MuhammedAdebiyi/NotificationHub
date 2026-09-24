@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { apiClient } from '@/shared/services/apiClient'
 import { authService } from '@/shared/services/auth.service'
+import ResendVerification from '@/features/auth/components/ResendVerification'
 
 type VerifyStatus = 'verifying' | 'success' | 'error'
 
@@ -74,6 +75,11 @@ export default function VerifyEmail() {
           <p className="text-ink/60 mb-6">
             {errorMessage}
           </p>
+
+          <div className="mb-6">
+            <p className="text-sm text-ink/60 mb-3">Enter your email to get a fresh link:</p>
+            <ResendVerification />
+          </div>
 
           <a
             href="/signup"
