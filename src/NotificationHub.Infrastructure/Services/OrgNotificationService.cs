@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using NotificationHub.Application.Abstractions;
+using NotificationHub.Application.Email;
 using NotificationHub.Infrastructure.Persistence;
 
 namespace NotificationHub.Infrastructure.Services;
@@ -57,7 +58,7 @@ public class OrgNotificationService : IOrgNotificationService
                     From: from,
                     To: member.User!.Email,
                     Subject: subject,
-                    Html: html,
+                    Html: EmailTemplates.Wrap(subject, html),
                     Text: text
                 ), cancellationToken);
             }

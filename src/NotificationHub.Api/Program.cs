@@ -48,8 +48,16 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddHttpAuth(builder.Configuration);
 
-builder.Services.Configure<VerificationSettings>(
-    builder.Configuration.GetSection(VerificationSettings.SectionName));
+builder.Services.Configure<VerificationSettings>(options =>
+{
+    // Prefer Verification:FrontendBaseUrl, fall back to App:FrontendBaseUrl
+    // (both are used across the codebase). Trim trailing slash so composed
+    // links never come out as "https://site//verify-email?...".
+    options.FrontendBaseUrl = (
+        builder.Configuration["Verification:FrontendBaseUrl"]
+        ?? builder.Configuration["App:FrontendBaseUrl"]
+        ?? string.Empty).TrimEnd('/');
+});
 
 builder.Services.AddMediatR(cfg =>
 {

@@ -419,19 +419,23 @@ public class OrgController : ControllerBase
         string orgName,
         CancellationToken cancellationToken)
     {
-        var frontendUrl = _configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173";
+        var frontendUrl = (_configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173").TrimEnd('/');
         var link = $"{frontendUrl}/accept-invite?token={invite.Token}";
+
+        var org = Application.Email.EmailTemplates.Encode(orgName);
+        var email = Application.Email.EmailTemplates.Encode(invite.Email);
+        var role = Application.Email.EmailTemplates.Encode(invite.Role);
+
+        var inner = Application.Email.EmailTemplates.H1("You've been invited")
+            + Application.Email.EmailTemplates.P($"<strong>{org}</strong> invited you to join their team on NotificationHub as <strong>{role}</strong>.")
+            + Application.Email.EmailTemplates.Button(link, "Accept invite")
+            + Application.Email.EmailTemplates.Muted($"This invite was sent to {email} and expires in 7 days.");
 
         await _emailProvider.SendAsync(new EmailMessage(
             From: "NotificationHub <notifications@mail.notificationhub.space>",
             To: invite.Email,
             Subject: $"You've been invited to join {orgName} on NotificationHub",
-            Html: $"""
-                <h2>You've been invited</h2>
-                <p>You've been invited to join <strong>{orgName}</strong> on NotificationHub as a <strong>{invite.Role}</strong>.</p>
-                <p><a href="{link}" style="background:#7c3aed;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;">Accept Invite</a></p>
-                <p style="color:#888;font-size:12px;">This invite expires in 7 days.</p>
-                """,
+            Html: Application.Email.EmailTemplates.Wrap($"Join {orgName} on NotificationHub", inner),
             Text: $"You've been invited to join {orgName} on NotificationHub. Accept here: {link}"
         ), cancellationToken);
     }

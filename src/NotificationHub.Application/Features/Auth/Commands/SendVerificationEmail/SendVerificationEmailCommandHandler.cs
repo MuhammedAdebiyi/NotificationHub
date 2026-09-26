@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.Options;
 using NotificationHub.Application.Abstractions;
+using NotificationHub.Application.Email;
 using NotificationHub.Domain.Entities;
 using NotificationHub.Shared.Abstractions;
 
@@ -58,11 +59,17 @@ public class SendVerificationEmailCommandHandler
 
         var link = $"{_settings.FrontendBaseUrl}/verify-email?token={token.Token}";
 
+        var name = EmailTemplates.Encode(user.FullName);
+        var inner = EmailTemplates.H1("Verify your email")
+            + EmailTemplates.P($"Hi {name}, welcome to NotificationHub! Please confirm this email address so we know it's really you.")
+            + EmailTemplates.Button(link, "Verify email address")
+            + EmailTemplates.Muted("This link expires in 1 hour. If you didn't create this account, you can safely ignore this email.");
+
         await _emailProvider.SendAsync(new EmailMessage(
             From: "NotificationHub <notifications@mail.notificationhub.space>",
             To: user.Email,
-            Subject: "Verify your email",
-            Html: $"<p>Click to verify your account:</p><p><a href=\"{link}\">{link}</a></p>",
+            Subject: "Verify your email — NotificationHub",
+            Html: EmailTemplates.Wrap("Confirm your NotificationHub account", inner),
             Text: $"Verify your account: {link}"
         ), cancellationToken);
 

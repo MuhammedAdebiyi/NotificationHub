@@ -1,6 +1,7 @@
 using MediatR;
 using Microsoft.Extensions.Options;
 using NotificationHub.Application.Abstractions;
+using NotificationHub.Application.Email;
 using NotificationHub.Domain.Entities;
 using NotificationHub.Shared.Abstractions;
 
@@ -48,18 +49,19 @@ public class ForgotPasswordCommandHandler : IRequestHandler<ForgotPasswordComman
 
         var resetLink = $"{_settings.FrontendBaseUrl}/reset-password?token={token.Token}";
 
-    await _emailProvider.SendAsync(new EmailMessage(
-        From: "NotificationHub <notifications@mail.notificationhub.space>",
-        To: user.Email,
-        Subject: "Reset your NotificationHub password",
-        Html: $"""
-            <p>Hi {user.FullName},</p>
-            <p>Click the link below to reset your password. This link expires in 1 hour.</p>
-            <p><a href="{resetLink}">Reset Password</a></p>
-            <p>If you didn't request this, ignore this email.</p>
-        """,
-        Text: $"Hi {user.FullName}, reset your password here: {resetLink} (expires in 1 hour)"
-    ), cancellationToken);
+        var name = EmailTemplates.Encode(user.FullName);
+        var inner = EmailTemplates.H1("Reset your password")
+            + EmailTemplates.P($"Hi {name}, we received a request to reset your NotificationHub password.")
+            + EmailTemplates.Button(resetLink, "Reset password")
+            + EmailTemplates.Muted("This link expires in 1 hour. If you didn't request this, you can safely ignore this email — your password won't change.");
+
+        await _emailProvider.SendAsync(new EmailMessage(
+            From: "NotificationHub <notifications@mail.notificationhub.space>",
+            To: user.Email,
+            Subject: "Reset your NotificationHub password",
+            Html: EmailTemplates.Wrap("Reset your NotificationHub password", inner),
+            Text: $"Hi {user.FullName}, reset your password here: {resetLink} (expires in 1 hour)"
+        ), cancellationToken);
 
         return Result<bool>.Success(true);
     }
