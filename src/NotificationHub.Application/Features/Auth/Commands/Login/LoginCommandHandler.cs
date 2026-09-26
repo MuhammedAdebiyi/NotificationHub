@@ -37,6 +37,17 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, Result<LoginRes
         if (user is null || !_passwordHasher.Verify(request.Password, user.PasswordHash))
             return Result<LoginResult>.Failure("Invalid email or password.");
 
+        // Best-effort: upgrade legacy higher-cost hashes on successful login
+        if (user is not null && _passwordHasher.NeedsRehash(user.PasswordHash))
+        {
+            try
+            {
+                user.PasswordHash = _passwordHasher.Hash(request.Password);
+                await _userRepository.SaveChangesAsync(cancellationToken);
+            }
+            catch { /* next login retries */ }
+        }
+
         if (!user.IsEmailVerified)
         {
             try { await _mediator.Send(new SendVerificationEmailCommand(user.Id), cancellationToken); }

@@ -49,6 +49,14 @@ public class ApiKeyRepository : IApiKeyRepository
             .Where(k => k.Id == id)
             .ExecuteUpdateAsync(s => s.SetProperty(k => k.LastUsedAt, lastUsedAt), cancellationToken);
     }
+
+    public async Task UpdateKeyHashAsync(
+        Guid id, string keyHash, CancellationToken cancellationToken = default)
+    {
+        await _context.ApiKeys
+            .Where(k => k.Id == id)
+            .ExecuteUpdateAsync(s => s.SetProperty(k => k.KeyHash, keyHash), cancellationToken);
+    }
     public async Task<ApiKey?> GetByHashAsync(
         string keyHash, CancellationToken cancellationToken = default)
     {

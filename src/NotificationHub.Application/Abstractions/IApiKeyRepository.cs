@@ -10,5 +10,6 @@ public interface IApiKeyRepository
     Task AddAsync(ApiKey apiKey, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<ApiKey>> GetByPrefixAsync(string prefix, CancellationToken cancellationToken = default);
     Task StampLastUsedAsync(Guid id, DateTime lastUsedAt, CancellationToken cancellationToken = default);
+    Task UpdateKeyHashAsync(Guid id, string keyHash, CancellationToken cancellationToken = default);
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
 }
