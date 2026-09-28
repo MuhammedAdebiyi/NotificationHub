@@ -100,6 +100,7 @@ The project focuses on backend engineering concepts including:
 - Login
 - JWT authentication
 - Email verification
+- Verification email resend (rate-limited)
 - Password reset
 - Organization invitations
 
@@ -140,10 +141,10 @@ Applications authenticate using organization API keys.
 Improvements include:
 
 - Prefix lookup
-- BCrypt verification
+- SHA-256 verification (constant-time, legacy bcrypt hashes upgrade on first use)
 - O(1) key lookup
 - One-time plaintext display
-- Last-used tracking
+- Last-used tracking (throttled to one write per key per minute)
 - Revocation support
 
 ---
@@ -199,6 +200,44 @@ Dead Letter Queue
 ```
 
 The HTTP request never waits for email delivery.
+
+---
+
+## Delivery Status: Accepted vs Delivered
+
+The system distinguishes technical success from real delivery outcome — the
+same distinction financial systems make between "accepted" and "settled".
+
+```
+Provider accepted (Sent)
+
+↓  provider delivery webhook
+
+Delivered | Bounced | Complained
+```
+
+- `Sent` means the provider's API accepted the message. It is **not** a
+  delivery claim and the UI labels it "Provider accepted".
+- `Delivered` and `Bounced` are set only from signed provider webhooks —
+  never optimistically by the worker.
+- Inbound endpoint: `POST /api/v1/webhooks/provider/sendbyte`
+  (HMAC-SHA256 `sendbyte-signature`, replay-protected, idempotent).
+- Outgoing webhooks emit `notification.delivered` and `notification.bounced`
+  alongside `notification.sent`, `notification.retrying`, `notification.failed`.
+- Dashboard payload views are masked (reset tokens, codes, secrets are
+  replaced with `***`). The database keeps the original content so retries
+  send the exact message.
+
+---
+
+## Outgoing Webhooks
+
+Organizations register signed webhook endpoints for their own integrations:
+
+- Events: `notification.sent`, `notification.retrying`, `notification.failed`,
+  `notification.delivered`, `notification.bounced`
+- Per-endpoint signing secret
+- Delivery log with response codes and replay
 
 ---
 
@@ -535,9 +574,13 @@ Idempotency is enforced using unique keys stored in the database.
 
 NotificationHub depends on abstractions rather than providers.
 
-Current provider:
+Current providers:
 
-- SendByte
+- SendByte (default — verified sending domain `mail.notificationhub.space`)
+- Resend (fallback)
+
+Provider selection is resolved per organization. Delivery events flow back
+through provider webhooks (see "Delivery Status" above).
 
 Future providers can be added without modifying business logic.
 
@@ -571,34 +614,64 @@ The system exposes:
 - Infrastructure status
 - Delivery metrics
 
+Health endpoints are split so deploy gates can tell "process alive" from
+"dependencies working":
+
+```
+GET /health   — liveness only (no dependencies)
+GET /ready    — database reachability, 503 when unready
+```
+
+---
+
+## Performance
+
+Load tested with k6 on production hardware (4-core VPS, shared with other
+services):
+
+| Scenario | Concurrency | Throughput | p95 |
+|---|---|---|---|
+| `GET /health` | 200 VUs | 6,283 req/s | 64 ms |
+| `GET /ready` (DB round-trip) | 30 VUs | 2,240 req/s | 18 ms |
+| `POST /notifications` | 100 VUs | 525 req/s | 262 ms |
+| `POST /auth/login` (BCrypt) | 20 VUs | 35 req/s | 755 ms |
+
+Zero failed requests across ~270k requests. API-key auth uses SHA-256
+(constant-time) rather than bcrypt specifically because verification runs on
+every request.
+
 ---
 
 # Current Technology Stack
 
 Backend
 
-- ASP.NET Core
+- .NET 10 / ASP.NET Core
 - Entity Framework Core
-- PostgreSQL
-- Redis
+- PostgreSQL (self-hosted)
+- Redis (self-hosted)
 
 Frontend
 
-- React
+- React 19
 - TypeScript
+- Vite
 - Tailwind CSS
 - TipTap
 
 Authentication
 
 - JWT
-- BCrypt
+- BCrypt (passwords)
+- SHA-256 (API keys)
 
 Infrastructure
 
-- Docker
-- Redis
+- Docker (blue-green deploys)
+- GitHub Actions CI/CD
+- Caddy
 - BackgroundService
+- k6 (load testing)
 
 ---
 
@@ -617,10 +690,12 @@ Infrastructure
 | Dashboard | Complete |
 | Analytics | Complete |
 | Campaign UI | Complete |
+| Outgoing Webhooks | Complete |
+| Provider Delivery Callbacks (DLR) | Complete |
 | Team Management | In Progress |
-| API Keys | In Progress |
+| API Keys | Complete |
 | SignalR | Planned |
-| Multiple Providers | Planned |
+| Additional Providers | Planned |
 | BYOD Domains | Planned |
 
 ---

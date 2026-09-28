@@ -72,8 +72,11 @@ export default function NotificationsPage() {
           >
             <option value="">All</option>
             <option value="Pending">Pending</option>
+            <option value="Queued">Queued</option>
             <option value="Processing">Processing</option>
-            <option value="Sent">Sent</option>
+            <option value="Sent">Accepted</option>
+            <option value="Delivered">Delivered</option>
+            <option value="Bounced">Bounced</option>
             <option value="Failed">Failed</option>
             <option value="Retrying">Retrying</option>
             <option value="DeadLetter">Dead Letter</option>

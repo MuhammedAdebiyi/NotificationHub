@@ -1,4 +1,4 @@
-export type NotificationStatus = 'Pending' | 'Processing' | 'Sent' | 'Failed' | 'Retrying' | 'DeadLetter'
+export type NotificationStatus = 'Pending' | 'Queued' | 'Processing' | 'Sent' | 'Delivered' | 'Bounced' | 'Failed' | 'Retrying' | 'DeadLetter'
 export type NotificationChannel = 'Email' | 'Sms' | 'Push' | 'InApp'
 
 export interface Notification {

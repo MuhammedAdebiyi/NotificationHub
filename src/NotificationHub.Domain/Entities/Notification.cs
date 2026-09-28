@@ -41,6 +41,12 @@ public class Notification : BaseEntity
     /// </summary>
     public DateTime? ProcessedAt { get; private set; }
 
+    /// <summary>
+    /// When the provider confirmed delivery to the recipient's server
+    /// (from a delivery webhook — not the same as ProcessedAt/accepted).
+    /// </summary>
+    public DateTime? DeliveredAt { get; private set; }
+
     // Provider information
     public string? Provider { get; private set; }
 
@@ -70,7 +76,11 @@ public class Notification : BaseEntity
         Status = NotificationStatus.Processing;
     }
 
-    public void MarkDelivered(
+    /// <summary>
+    /// Provider's API accepted the message. This is NOT delivery confirmation —
+    /// status stays Sent until a provider delivery webhook arrives.
+    /// </summary>
+    public void MarkAccepted(
         string provider,
         string providerMessageId)
     {
@@ -80,6 +90,35 @@ public class Notification : BaseEntity
         NextRetryAt = null;
         ProcessedAt = DateTime.UtcNow;
         Status = NotificationStatus.Sent;
+    }
+
+    /// <summary>
+    /// Provider webhook confirmed final delivery. Idempotent: only a Sent
+    /// notification transitions to Delivered; repeats are no-ops.
+    /// </summary>
+    public bool TryMarkProviderDelivered()
+    {
+        if (Status != NotificationStatus.Sent)
+            return false;
+
+        Status = NotificationStatus.Delivered;
+        DeliveredAt = DateTime.UtcNow;
+        LastError = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Provider webhook reported a bounce or complaint. Idempotent.
+    /// </summary>
+    public bool TryMarkProviderBounced(string reason)
+    {
+        if (Status != NotificationStatus.Sent &&
+            Status != NotificationStatus.Delivered)
+            return false;
+
+        Status = NotificationStatus.Bounced;
+        LastError = reason;
+        return true;
     }
 
     public void ScheduleRetry(

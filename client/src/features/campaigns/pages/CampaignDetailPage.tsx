@@ -486,12 +486,13 @@ export default function CampaignDetailPage() {
                     <td className="px-4 py-3 font-mono text-xs text-ink/70">{n.recipientEmail}</td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        n.status === 'Sent' ? 'bg-teal/10 text-teal' :
-                        n.status === 'DeadLetter' || n.status === 'Failed' ? 'bg-coral/10 text-coral' :
+                        n.status === 'Delivered' ? 'bg-teal/10 text-teal' :
+                        n.status === 'Sent' ? 'bg-yellow/10 text-ink' :
+                        n.status === 'DeadLetter' || n.status === 'Failed' || n.status === 'Bounced' ? 'bg-coral/10 text-coral' :
                         n.status === 'Processing' || n.status === 'Retrying' ? 'bg-yellow/20 text-ink' :
                         'bg-fog text-ink/50'
                       }`}>
-                        {n.status}
+                        {n.status === 'Sent' ? 'Accepted' : n.status}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-ink/40">{n.retryCount}</td>

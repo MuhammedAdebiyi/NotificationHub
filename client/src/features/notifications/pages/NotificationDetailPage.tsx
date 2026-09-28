@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import AppLayout from '@/app/layouts/AppLayout'
 import { apiClient } from '@/shared/services/apiClient'
 
-type NotificationStatus = 'Pending' | 'Processing' | 'Sent' | 'Failed' | 'Retrying' | 'DeadLetter'
+type NotificationStatus = 'Pending' | 'Queued' | 'Processing' | 'Sent' | 'Delivered' | 'Bounced' | 'Failed' | 'Retrying' | 'DeadLetter'
 
 interface NotificationLog {
   id: string
@@ -55,6 +55,7 @@ interface NotificationDetail {
   workerId?: string
   acceptedAt?: string
   processedAt?: string
+  deliveredAt?: string | null
   provider?: ProviderInfo
   campaign?: CampaignRef
   template?: TemplateRef
@@ -64,12 +65,18 @@ const statusConfig: Record<
   NotificationStatus,
   { color: string; bg: string; ring: string; label: string; summary: string }
 > = {
-  Pending:    { color: 'text-ink/60', bg: 'bg-ink/10',    ring: 'ring-ink/10',    label: 'Pending',     summary: 'Waiting in queue' },
-  Processing: { color: 'text-violet', bg: 'bg-violet/10', ring: 'ring-violet/20', label: 'Processing',  summary: 'Being sent right now' },
-  Sent:       { color: 'text-teal',   bg: 'bg-teal/10',   ring: 'ring-teal/20',   label: 'Delivered',   summary: 'Delivered successfully' },
-  Failed:     { color: 'text-coral',  bg: 'bg-coral/10',  ring: 'ring-coral/20',  label: 'Failed',      summary: 'Delivery failed' },
-  Retrying:   { color: 'text-yellow', bg: 'bg-yellow/20', ring: 'ring-yellow/30', label: 'Retrying',    summary: 'Retry in progress' },
-  DeadLetter: { color: 'text-coral',  bg: 'bg-coral/20',  ring: 'ring-coral/30',  label: 'Dead Letter', summary: 'Exhausted all retries' },
+  // "Sent" = the provider's API accepted the message (NOT delivery).
+  // "Delivered" is set only by the provider's delivery webhook (DLR).
+  // "Bounced" likewise comes only from provider bounce/complaint webhooks.
+  Pending:    { color: 'text-ink/60', bg: 'bg-ink/10',    ring: 'ring-ink/10',    label: 'Pending',      summary: 'Waiting in queue' },
+  Queued:     { color: 'text-ink/60', bg: 'bg-ink/10',    ring: 'ring-ink/10',    label: 'Queued',       summary: 'Waiting for a worker slot' },
+  Processing: { color: 'text-violet', bg: 'bg-violet/10', ring: 'ring-violet/20', label: 'Processing',   summary: 'Being sent right now' },
+  Sent:       { color: 'text-yellow', bg: 'bg-yellow/10', ring: 'ring-yellow/30', label: 'Provider accepted', summary: 'Provider API accepted the message — awaiting delivery confirmation' },
+  Delivered:  { color: 'text-teal',   bg: 'bg-teal/10',   ring: 'ring-teal/20',   label: 'Delivered',    summary: 'Provider confirmed delivery to the recipient server' },
+  Bounced:    { color: 'text-coral',  bg: 'bg-coral/10',  ring: 'ring-coral/20',  label: 'Bounced',      summary: 'Recipient server rejected the email' },
+  Failed:     { color: 'text-coral',  bg: 'bg-coral/10',  ring: 'ring-coral/20',  label: 'Failed',       summary: 'Delivery failed' },
+  Retrying:   { color: 'text-yellow', bg: 'bg-yellow/20', ring: 'ring-yellow/30', label: 'Retrying',     summary: 'Retry in progress' },
+  DeadLetter: { color: 'text-coral',  bg: 'bg-coral/20',  ring: 'ring-coral/30',  label: 'Dead Letter',  summary: 'Exhausted all retries' },
 }
 
 function formatMs(ms: number | null): string {
@@ -198,7 +205,9 @@ export default function NotificationDetailPage() {
 
   const status = statusConfig[notification.status] ?? statusConfig.Pending
   const canRetry = notification.status === 'Failed' || notification.status === 'DeadLetter'
-  const isTerminal = notification.status === 'Sent' || notification.status === 'Failed' || notification.status === 'DeadLetter'
+  const isTerminal = notification.status === 'Delivered' || notification.status === 'Bounced'
+    || notification.status === 'Failed' || notification.status === 'DeadLetter'
+    || notification.status === 'Sent'
 
   return (
     <AppLayout>
@@ -226,7 +235,11 @@ export default function NotificationDetailPage() {
               <div className="flex flex-wrap gap-2">
                 {isTerminal && deliveryTimeMs !== null && (
                   <span className="px-2.5 py-1 rounded-full bg-white/70 text-xs font-medium text-ink/70">
-                    {formatMs(deliveryTimeMs)} to deliver
+                    {notification.status === 'Delivered'
+                      ? `${formatMs(deliveryTimeMs)} to deliver`
+                      : notification.status === 'Sent'
+                        ? `${formatMs(deliveryTimeMs)} to accept`
+                        : `${formatMs(deliveryTimeMs)}`}
                   </span>
                 )}
                 {notification.lastProvider && (
@@ -264,7 +277,7 @@ export default function NotificationDetailPage() {
 
         {/* Delivery metrics — only rendered when the backend actually sent the field */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-          <MetricCard label="Delivery Time" value={isTerminal ? formatMs(deliveryTimeMs) : '—'} />
+          <MetricCard label={notification.status === 'Sent' ? 'Accept Time' : 'Delivery Time'} value={isTerminal ? formatMs(deliveryTimeMs) : '—'} />
           <MetricCard label="Queue Wait" value={formatMs(queueWaitMs)} />
           <MetricCard label="Attempts" value={String(Math.max(notification.retryCount, logs.length, 1))} />
           <MetricCard label="Worker" value={notification.workerId ?? '—'} mono />
@@ -292,7 +305,7 @@ export default function NotificationDetailPage() {
                   label="Worker picked up"
                   timestamp={notification.acceptedAt}
                   tone="neutral"
-                  detail={notification.workerId ? `worker ${notification.workerId}` : undefined}
+                  detail={notification.workerId ?? undefined}
                 />
               )}
 
@@ -311,11 +324,16 @@ export default function NotificationDetailPage() {
                 />
               ))}
 
-              {/* Final status */}
+              {/* Final status — Delivered/Bounced come from provider webhooks */}
               <TimelineNode
                 label={status.label}
-                timestamp={notification.processedAt}
-                tone={notification.status === 'Sent' ? 'success' : notification.status === 'Failed' || notification.status === 'DeadLetter' ? 'error' : 'active'}
+                timestamp={notification.deliveredAt ?? notification.processedAt}
+                tone={
+                  notification.status === 'Delivered' ? 'success'
+                  : notification.status === 'Bounced' || notification.status === 'Failed' || notification.status === 'DeadLetter' ? 'error'
+                  : notification.status === 'Sent' ? 'active'
+                  : 'active'
+                }
                 isFinal
               />
             </div>

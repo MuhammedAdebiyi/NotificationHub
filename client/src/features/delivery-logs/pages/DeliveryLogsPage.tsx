@@ -39,7 +39,7 @@ export default function LogsPage() {
   }
 
   const providers = ['SendByte', 'Resend', 'SendGrid', 'Brevo', 'Smtp']
-  const statuses = ['Sent', 'Failed', 'Pending', 'Processing', 'Retrying', 'DeadLetter']
+  const statuses = ['Delivered', 'Bounced', 'Sent', 'Failed', 'Pending', 'Processing', 'Retrying', 'DeadLetter']
 
   return (
     <AppLayout>

@@ -20,6 +20,8 @@ public class StubNotificationProvider : INotificationProvider
 
     public string? LastProviderType { get; private set; }
 
+    public string? LastMessageId { get; private set; }
+
     public StubNotificationProvider(
         IEmailProviderFactory emailProviderFactory,
         ILogger<StubNotificationProvider> logger,
@@ -99,18 +101,39 @@ public class StubNotificationProvider : INotificationProvider
         var from = await ResolveFromAddressAsync(notification.OrganizationId, cancellationToken);
         var trackingPixel = $"<img src=\"https://notificationhub.space/api/v1/track/open/{notification.Id}\" width=\"1\" height=\"1\" style=\"display:none\" alt=\"\" />";
 
+        // Payloads arrive as {subject, body} plain text or {subject, html} full HTML
+        // documents. Wrap only plain text in <p>; HTML goes through as-is so the
+        // recipient actually renders the real email.
+        var content = payload.Html ?? payload.Text ?? payload.Body ?? string.Empty;
+        var looksLikeHtml = content.Contains('<') && content.Contains('>');
+
+        string html;
+        if (!looksLikeHtml)
+        {
+            html = $"<p>{content}</p>{trackingPixel}";
+        }
+        else if (content.Contains("</body>", StringComparison.OrdinalIgnoreCase))
+        {
+            html = content.Replace("</body>", $"{trackingPixel}</body>", StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            html = content + trackingPixel;
+        }
+
         var message = new EmailMessage(
             From: from,
             To: to,
             Subject: payload.Subject,
-            Html: $"<p>{payload.Body}</p>{trackingPixel}",
-            Text: payload.Body
+            Html: html,
+            Text: content
         );
 
         var emailProvider = await _emailProviderFactory.GetProviderAsync(notification.OrganizationId, cancellationToken);
         var emailId = await emailProvider.SendAsync(message, cancellationToken);
         var providerName = emailProvider.ProviderType;
         LastProviderType = providerName;
+        LastMessageId = emailId;
 
         _logger.LogInformation(
             "Email sent via {Provider} for notification {Id} to {To} from {From}",
@@ -182,6 +205,8 @@ public class StubNotificationProvider : INotificationProvider
 
     private record EmailPayload(
         [property: JsonPropertyName("subject")] string Subject,
-        [property: JsonPropertyName("body")] string Body
+        [property: JsonPropertyName("body")] string? Body,
+        [property: JsonPropertyName("html")] string? Html,
+        [property: JsonPropertyName("text")] string? Text
     );
 }

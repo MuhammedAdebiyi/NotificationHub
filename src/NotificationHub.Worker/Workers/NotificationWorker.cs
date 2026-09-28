@@ -11,9 +11,13 @@ namespace NotificationHub.Worker.Workers;
 
 public class NotificationWorker : BackgroundService
 {
-    // Each worker instance gets a unique ID so Analytics can count
-    // individual workers via the "worker:heartbeat:*" key pattern.
-    private readonly string _workerId = $"notification-{Guid.NewGuid():N}";
+    // Readable, stable worker identity: container hostname (short id) instead
+    // of a random GUID — heartbeat keys keep using it, and the dashboard shows
+    // it on each notification. Override with WORKER_NAME for a friendly label.
+    private readonly string _workerId =
+        Environment.GetEnvironmentVariable("WORKER_NAME") is { Length: > 0 } name
+            ? name
+            : $"worker-{Environment.MachineName}";
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConnectionMultiplexer _redis;
@@ -264,9 +268,9 @@ public class NotificationWorker : BackgroundService
 
         if (success)
         {
-            notification.MarkDelivered(
+            notification.MarkAccepted(
                 provider.LastProviderType ?? "Unknown",
-                string.Empty
+                provider.LastMessageId ?? string.Empty
             );
 
             await repository.SaveChangesAsync(stoppingToken);

@@ -21,5 +21,13 @@ public enum NotificationStatus
     Retrying,
 
     /// <summary>Max retries exhausted; moved to dead-letter queue.</summary>
-    DeadLetter
+    DeadLetter,
+
+    /// <summary>Provider confirmed final delivery to the recipient's mail server
+    /// (set only from provider delivery webhooks, never optimistically).</summary>
+    Delivered,
+
+    /// <summary>Recipient's server rejected the message or the recipient
+    /// complained (set only from provider webhooks).</summary>
+    Bounced
 }

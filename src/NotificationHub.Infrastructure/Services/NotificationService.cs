@@ -29,7 +29,7 @@ public class NotificationService : INotificationService
         var logs = notification.Logs.Select(l => new NotificationLogDto(
             l.Id,
             l.Provider,
-            l.Response,
+            SensitiveDataMasker.Mask(l.Response),
             !l.Response.Contains("error", StringComparison.OrdinalIgnoreCase) &&
             !l.Response.Contains("fail", StringComparison.OrdinalIgnoreCase),
             l.CreatedAt
@@ -43,16 +43,17 @@ public class NotificationService : INotificationService
             notification.Type,
             notification.Channel.ToString(),
             notification.Status.ToString(),
-            notification.Payload,
+            SensitiveDataMasker.Mask(notification.Payload),
             notification.RetryCount,
             notification.CreatedAt,
             lastLog?.Provider,
-            lastLog?.Response,
+            SensitiveDataMasker.Mask(lastLog?.Response),
             logs,
             notification.AcceptedAt,
             notification.ProcessedAt,
             notification.WorkerId,
-            notification.ProviderMessageId
+            notification.ProviderMessageId,
+            notification.DeliveredAt
         );
     }
 
@@ -65,7 +66,7 @@ public class NotificationService : INotificationService
 
         if (notification is null) return new List<NotificationLogDto>();
 
-        return await _context.NotificationLogs
+        var rows = await _context.NotificationLogs
             .Where(l => l.NotificationId == notification.Id)
             .OrderBy(l => l.CreatedAt)
             .Select(l => new NotificationLogDto(
@@ -76,6 +77,10 @@ public class NotificationService : INotificationService
                 l.CreatedAt
             ))
             .ToListAsync(ct);
+
+        return rows
+            .Select(l => l with { Response = SensitiveDataMasker.Mask(l.Response) })
+            .ToList();
     }
 
     public async Task<bool> RetryAsync(
@@ -97,5 +102,48 @@ public class NotificationService : INotificationService
         await _queue.EnqueueAsync(notification.Id, ct);
 
         return true;
+    }
+
+    public async Task<ProviderEventOutcome?> ApplyProviderEventAsync(
+        string emailId, string eventType, string? reason, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(emailId))
+            return null;
+
+        var notification = await _context.Notifications
+            .FirstOrDefaultAsync(n => n.ProviderMessageId == emailId, ct);
+
+        // Older sends stored an empty provider message id — the delivery log
+        // still carries "accepted: id=em_..." so fall back to matching on it.
+        if (notification is null)
+        {
+            var logMarker = $"accepted: id={emailId}";
+            notification = await _context.Notifications
+                .Where(n => n.Logs.Any(l => l.Response == logMarker))
+                .OrderByDescending(n => n.CreatedAt)
+                .FirstOrDefaultAsync(ct);
+        }
+
+        if (notification is null)
+            return null;
+
+        var changed = eventType switch
+        {
+            "email.delivered" => notification.TryMarkProviderDelivered(),
+            "email.bounced" => notification.TryMarkProviderBounced(
+                string.IsNullOrWhiteSpace(reason) ? "Bounced by recipient server" : reason),
+            "email.complained" => notification.TryMarkProviderBounced(
+                "Recipient marked the email as spam"),
+            _ => false
+        };
+
+        if (changed)
+            await _context.SaveChangesAsync(ct);
+
+        return new ProviderEventOutcome(
+            notification.PublicId,
+            notification.OrganizationId,
+            notification.Status.ToString(),
+            changed);
     }
 }
