@@ -692,10 +692,10 @@ Infrastructure
 | Campaign UI | Complete |
 | Outgoing Webhooks | Complete |
 | Provider Delivery Callbacks (DLR) | Complete |
-| Team Management | In Progress |
+| Team Management | Complete |
 | API Keys | Complete |
 | SignalR | Planned |
-| Additional Providers | Planned |
+| Additional Providers | Complete |
 | BYOD Domains | Planned |
 
 ---
@@ -750,7 +750,6 @@ Planned improvements include:
 - Slack integration
 - Discord integration
 - Telegram integration
-- Webhook delivery
 - Scheduled campaigns
 - Rate limiting
 - Circuit breakers
