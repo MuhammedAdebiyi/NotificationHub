@@ -52,10 +52,6 @@ interface ProviderHealth {
   error: string | null
 }
 
-const SENDER_EMAIL_OPTIONS = [
-  'notifications@mail.notificationhub.space',
-]
-
 function PermissionWall() {
   const navigate = useNavigate()
   return (
@@ -835,11 +831,10 @@ export default function SettingsPage() {
               <div className="py-3">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-ink/50">Sender name</span>
-                  <span className="text-xs text-ink/30 font-mono">@notificationhub.space</span>
                 </div>
                 <p className="text-xs text-ink/40 mb-2">
                   This is the name recipients see when your campaigns land in their inbox —
-                  e.g. "{fromName || 'NotificationHub'} &lt;notifications@mail.notificationhub.space&gt;".
+                  e.g. "{fromName || 'NotificationHub'} &lt;{fromEmail || 'notifications@yourdomain.com'}&gt;".
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -868,7 +863,6 @@ export default function SettingsPage() {
               <div className="py-3">
                 <div className="flex justify-between items-center mb-2">
                   <span className="text-ink/50">Sender email</span>
-                  <span className="text-xs text-ink/30 font-mono">@notificationhub.space</span>
                 </div>
                 <p className="text-xs text-ink/40 mb-2">
                   The address your campaigns are sent from. Pick the one recipients should see
@@ -880,20 +874,19 @@ export default function SettingsPage() {
                     value={fromEmail}
                     onChange={e => { setFromEmail(e.target.value); setFromEmailSaved(false); setFromEmailError(null) }}
                   >
-                    {!SENDER_EMAIL_OPTIONS.includes(fromEmail) && fromEmail && (
-                      <option value={fromEmail}>{fromEmail}</option>
-                    )}
-                    {SENDER_EMAIL_OPTIONS.map(opt => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                    {domains
-                      .filter(d => d.status === 'verified')
-                      .map(d => {
-                        const opt = `notifications@${d.domain}`
-                        return SENDER_EMAIL_OPTIONS.includes(opt) ? null : (
-                          <option key={d.id} value={opt}>{opt}</option>
-                        )
-                      })}
+                    {(() => {
+                      const verifiedOptions = domains
+                        .filter(d => d.status === 'verified')
+                        .map(d => `notifications@${d.domain}`)
+                      // Keep the current saved address selectable even if its
+                      // domain dropped out of the verified list.
+                      if (fromEmail && !verifiedOptions.includes(fromEmail)) {
+                        verifiedOptions.unshift(fromEmail)
+                      }
+                      return verifiedOptions.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))
+                    })()}
                   </select>
                   <button
                     onClick={handleSaveFromEmail}
