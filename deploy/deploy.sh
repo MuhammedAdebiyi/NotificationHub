@@ -11,8 +11,17 @@ IMAGE_WORKER="ghcr.io/muhammedadebiyi/notificationhub/notificationhub-worker:${I
 
 echo "Current: $CURRENT → Deploying to: $NEXT"
 
-docker pull "$IMAGE_API"
-docker pull "$IMAGE_WORKER"
+pull_retry() {
+  for i in 1 2 3 4 5; do
+    if docker pull "$1"; then return 0; fi
+    echo "pull failed for $1 — retry $i/5 in 15s"
+    sleep 15
+  done
+  echo "FATAL: could not pull $1 after 5 attempts"
+  return 1
+}
+pull_retry "$IMAGE_API" || exit 1
+pull_retry "$IMAGE_WORKER" || exit 1
 
 docker rm -f "notificationhub-api-$NEXT" 2>/dev/null || true
 docker run -d --name "notificationhub-api-$NEXT" \
@@ -34,22 +43,37 @@ for i in {1..30}; do
     break
   fi
   if [ "$i" -eq 30 ]; then
-    echo "Health check FAILED after 30 attempts. Rolling back — leaving $CURRENT active."
+    echo "Health check FAILED after 30 attempts. Rolling back."
     docker rm -f "notificationhub-api-$NEXT"
     exit 1
   fi
   sleep 2
 done
 
-sed -i "s/notificationhub-api-$CURRENT/notificationhub-api-$NEXT/" /root/leadforge/caddy/Caddyfile
-if ! docker exec leadforge-caddy caddy reload --config /etc/caddy/Caddyfile 2>&1; then
-  echo "caddy reload failed — falling back to full recreate"
-  cd /root/leadforge && docker compose up -d --no-deps --force-recreate caddy
+cat > /opt/notificationhub/caddy/Caddyfile << CADDYEOF
+api.notificationhub.space {
+    log
+    reverse_proxy notificationhub-api-${NEXT}:8080
+}
+
+169.58.108.115.sslip.io {
+    log
+    reverse_proxy notificationhub-api-${NEXT}:8080
+}
+
+notificationhub.space {
+    redir https://notification-hub-chi.vercel.app{uri} permanent
+}
+CADDYEOF
+
+if ! docker exec notificationhub-caddy caddy reload --config /etc/caddy/Caddyfile 2>&1; then
+  echo "caddy reload failed — restarting container"
+  docker restart notificationhub-caddy
 fi
 
 sleep 2
 if ! curl -sf "https://169.58.108.115.sslip.io/health" > /dev/null 2>&1; then
-  echo "WARNING: public health check failed after flip. NOT tearing down $CURRENT — investigate before retrying."
+  echo "WARNING: public health check failed after flip. NOT tearing down $CURRENT."
   echo "$NEXT" > "$STATE_FILE"
   exit 1
 fi
