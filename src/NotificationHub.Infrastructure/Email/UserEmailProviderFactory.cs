@@ -83,6 +83,63 @@ public class UserEmailProviderFactory : IEmailProviderFactory
         return _serviceProvider.GetRequiredService<IEmailProvider>();
     }
 
+    // Send through the org's providers in order (default first, then the rest).
+    // A provider that fails to ACCEPT the message (HTTP error) hands off to the
+    // next one — this is the automatic fallback the Settings page promises.
+    // Throws ProviderSendFailedException when every provider refused.
+    public async Task<ProviderSendResult> SendWithFallbackAsync(
+        Guid organizationId,
+        EmailMessage message,
+        CancellationToken cancellationToken = default)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var configRepo = scope.ServiceProvider.GetRequiredService<IEmailProviderConfigRepository>();
+        var encryptionService = scope.ServiceProvider.GetRequiredService<IEncryptionService>();
+
+        var configs = await configRepo.GetAllByOrgAsync(organizationId, cancellationToken);
+
+        if (configs.Count == 0)
+        {
+            _logger.LogDebug("No email provider configured for org {OrgId}, using platform default", organizationId);
+            var platform = _serviceProvider.GetRequiredService<IEmailProvider>();
+            var platformId = await platform.SendAsync(message, cancellationToken);
+            return new ProviderSendResult(platform.ProviderType, platformId, Array.Empty<ProviderSendFailure>());
+        }
+
+        var ordered = configs.OrderByDescending(c => c.IsDefault).ToList();
+        var failures = new List<ProviderSendFailure>();
+
+        foreach (var config in ordered)
+        {
+            try
+            {
+                var provider = CreateProvider(config, scope.ServiceProvider, encryptionService);
+                var messageId = await provider.SendAsync(message, cancellationToken);
+
+                if (failures.Count > 0)
+                {
+                    _logger.LogInformation(
+                        "Fallback succeeded: {Provider} accepted after {Count} failed provider(s) for org {OrgId}",
+                        provider.ProviderType, failures.Count, organizationId);
+                }
+
+                return new ProviderSendResult(provider.ProviderType, messageId, failures);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Provider {ProviderType} failed to accept message for org {OrgId} — trying next",
+                    config.ProviderType, organizationId);
+                failures.Add(new ProviderSendFailure(config.ProviderType, ex.Message));
+            }
+        }
+
+        throw new ProviderSendFailedException(failures);
+    }
+
     public async Task<IReadOnlyList<EmailProviderInfo>> GetAllProvidersAsync(Guid organizationId, CancellationToken cancellationToken = default)
     {
         using var scope = _serviceProvider.CreateScope();

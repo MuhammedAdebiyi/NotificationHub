@@ -33,7 +33,7 @@ public class SendGridAdapter : IEmailProvider, IEmailProviderDomains
                     ["to"] = new[] { new Dictionary<string, string> { ["email"] = message.To } }
                 }
             },
-            ["from"] = new Dictionary<string, string> { ["email"] = message.From },
+            ["from"] = BuildFrom(message.From),
             ["subject"] = message.Subject,
             ["content"] = new[]
             {
@@ -69,6 +69,26 @@ public class SendGridAdapter : IEmailProvider, IEmailProviderDomains
 
         _logger.LogInformation("SendGrid accepted email id={EmailId} to={To}", emailId, message.To);
         return emailId;
+    }
+
+    // SendGrid's from.email must be a bare address; the display name belongs
+    // in from.name. "Display Name <a@b.c>" in email is rejected.
+    private static Dictionary<string, string> BuildFrom(string from)
+    {
+        try
+        {
+            var address = new System.Net.Mail.MailAddress(from);
+            var result = new Dictionary<string, string> { ["email"] = address.Address };
+            if (!string.IsNullOrWhiteSpace(address.DisplayName))
+            {
+                result["name"] = address.DisplayName;
+            }
+            return result;
+        }
+        catch (FormatException)
+        {
+            return new Dictionary<string, string> { ["email"] = from.Trim() };
+        }
     }
 
     public async Task<IReadOnlyList<ProviderDomain>> ListDomainsAsync(CancellationToken cancellationToken = default)

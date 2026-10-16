@@ -31,6 +31,7 @@ public class OrgController : ControllerBase
     private readonly IClock _clock;
     private readonly ITemplateRepository _templateRepository;
     private readonly IConfiguration _configuration;
+    private readonly IEmailProviderFactory _emailProviderFactory;
 
     public OrgController(
         IOrganizationMemberRepository memberRepository,
@@ -47,7 +48,8 @@ public class OrgController : ControllerBase
         INotificationRepository notificationRepository,
         INotificationQueue notificationQueue,
         ITemplateRepository templateRepository,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IEmailProviderFactory emailProviderFactory)
     {
         _memberRepository = memberRepository;
         _inviteRepository = inviteRepository;
@@ -64,6 +66,7 @@ public class OrgController : ControllerBase
         _clock = clock;
         _templateRepository = templateRepository;
         _configuration = configuration;
+        _emailProviderFactory = emailProviderFactory;
     }
     [HttpGet("/api/v1/org/info")]
     [Authorize]
@@ -118,6 +121,49 @@ public class OrgController : ControllerBase
 
             if (!request.FromEmail.Contains('@'))
                 return BadRequest(new { error = "FromEmail must be a valid email address." });
+
+            // Only verified sending domains may be used as the sender — this is
+            // what keeps provider "valid sender email required" rejections (and
+            // spam-folder placement) from happening in the first place.
+            string senderDomain;
+            try
+            {
+                senderDomain = new System.Net.Mail.MailAddress(request.FromEmail).Address
+                    .Split('@').Last().Trim().ToLowerInvariant();
+            }
+            catch (FormatException)
+            {
+                return BadRequest(new { error = "FromEmail must be a valid email address." });
+            }
+
+            var domains = await _emailProviderFactory.ListDomainsWithHealthAsync(
+                _currentOrg.OrganizationId.Value, cancellationToken);
+
+            // Enforce only when at least one provider reports a verified domain —
+            // providers without domain support (SMTP) or a failed listing must not
+            // lock the org out of saving its sender.
+            var readyDomains = domains.Domains
+                .Where(d => d.DeliverabilityReady)
+                .Select(d => d.Domain.ToLowerInvariant())
+                .Distinct()
+                .ToList();
+
+            if (readyDomains.Count > 0)
+            {
+                var isVerified = readyDomains.Any(d =>
+                    senderDomain == d ||
+                    senderDomain.EndsWith("." + d, StringComparison.Ordinal));
+
+                if (!isVerified)
+                {
+                    return BadRequest(new
+                    {
+                        error = $"Sender domain '{senderDomain}' is not verified with your email providers. " +
+                                $"Verified domains: {string.Join(", ", readyDomains)}.",
+                        verifiedDomains = readyDomains
+                    });
+                }
+            }
         }
 
         org.FromName = request.FromName.Trim();

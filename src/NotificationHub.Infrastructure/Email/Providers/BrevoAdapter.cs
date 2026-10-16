@@ -24,9 +24,16 @@ public class BrevoAdapter : IEmailProvider, IEmailProviderDomains
 
     public async Task<string> SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
+        var (fromEmail, fromName) = ParseFrom(message.From);
+        var sender = new Dictionary<string, string> { ["email"] = fromEmail };
+        if (!string.IsNullOrWhiteSpace(fromName))
+        {
+            sender["name"] = fromName;
+        }
+
         var payload = new Dictionary<string, object?>
         {
-            ["sender"] = new Dictionary<string, string> { ["email"] = message.From },
+            ["sender"] = sender,
             ["to"] = new[]
             {
                 new Dictionary<string, string> { ["email"] = message.To }
@@ -61,6 +68,23 @@ public class BrevoAdapter : IEmailProvider, IEmailProviderDomains
 
         _logger.LogInformation("Brevo accepted email id={EmailId} to={To}", emailId, message.To);
         return emailId;
+    }
+
+    // Brevo requires sender.email to be a bare address — "Display Name <a@b.c>"
+    // is rejected with 400 "valid sender email required". The display name goes
+    // in sender.name instead.
+    private static (string Email, string? Name) ParseFrom(string from)
+    {
+        try
+        {
+            var address = new System.Net.Mail.MailAddress(from);
+            var name = string.IsNullOrWhiteSpace(address.DisplayName) ? null : address.DisplayName;
+            return (address.Address, name);
+        }
+        catch (FormatException)
+        {
+            return (from.Trim(), null);
+        }
     }
 
     public async Task<IReadOnlyList<ProviderDomain>> ListDomainsAsync(CancellationToken cancellationToken = default)

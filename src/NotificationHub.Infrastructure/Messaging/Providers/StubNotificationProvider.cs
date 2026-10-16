@@ -65,7 +65,7 @@ public class StubNotificationProvider : INotificationProvider
         catch (Exception ex)
         {
             _logger.LogError(ex, "Provider failed for notification {Id}", notification.Id);
-            await WriteLogAsync(notification, "Unknown", $"error: {ex.Message}", isSuccess: false, cancellationToken);
+            await WriteLogAsync(notification, LastProviderType ?? "Unknown", $"error: {ex.Message}", isSuccess: false, cancellationToken);
             return false;
         }
     }
@@ -129,11 +129,36 @@ public class StubNotificationProvider : INotificationProvider
             Text: content
         );
 
-        var emailProvider = await _emailProviderFactory.GetProviderAsync(notification.OrganizationId, cancellationToken);
-        var emailId = await emailProvider.SendAsync(message, cancellationToken);
-        var providerName = emailProvider.ProviderType;
+        // Fallback chain: default provider first, then the rest. Individual
+        // failures are written as their own log rows so the timeline shows
+        // every attempt, then the winning provider on the success row.
+        ProviderSendResult result;
+        try
+        {
+            result = await _emailProviderFactory.SendWithFallbackAsync(
+                notification.OrganizationId, message, cancellationToken);
+        }
+        catch (ProviderSendFailedException pex)
+        {
+            _logger.LogError(pex, "All providers failed for notification {Id}", notification.Id);
+
+            foreach (var failure in pex.Failures)
+            {
+                await WriteLogAsync(notification, failure.ProviderType, $"error: {failure.Error}", isSuccess: false, cancellationToken);
+            }
+
+            LastProviderType = pex.Failures.Count > 0 ? pex.Failures[^1].ProviderType : "Unknown";
+            return false;
+        }
+
+        var providerName = result.ProviderType;
         LastProviderType = providerName;
-        LastMessageId = emailId;
+        LastMessageId = result.MessageId;
+
+        foreach (var failure in result.Failures)
+        {
+            await WriteLogAsync(notification, failure.ProviderType, $"error: {failure.Error}", isSuccess: false, cancellationToken);
+        }
 
         _logger.LogInformation(
             "Email sent via {Provider} for notification {Id} to {To} from {From}",
@@ -142,7 +167,7 @@ public class StubNotificationProvider : INotificationProvider
         await WriteLogAsync(
             notification,
             providerName,
-            $"accepted: id={emailId}",
+            $"accepted: id={result.MessageId}",
             isSuccess: true,
             cancellationToken);
 
