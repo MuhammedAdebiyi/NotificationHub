@@ -24,6 +24,7 @@ public class AppDbContext : DbContext
     public DbSet<EmailProviderConfig> EmailProviderConfigs => Set<EmailProviderConfig>();
     public DbSet<Webhook> Webhooks => Set<Webhook>();
     public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
+    public DbSet<RecipientOptOut> RecipientOptOuts => Set<RecipientOptOut>();
 
 
 

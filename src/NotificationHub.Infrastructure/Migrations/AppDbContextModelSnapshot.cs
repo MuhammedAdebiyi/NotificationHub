@@ -673,6 +673,31 @@ namespace NotificationHub.Infrastructure.Migrations
                     b.ToTable("OrganizationMembers");
                 });
 
+            modelBuilder.Entity("NotificationHub.Domain.Entities.RecipientOptOut", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)");
+
+                    b.Property<DateTime>("OptedOutAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "Email")
+                        .IsUnique();
+
+                    b.ToTable("RecipientOptOuts", (string)null);
+                });
+
             modelBuilder.Entity("NotificationHub.Domain.Entities.Template", b =>
                 {
                     b.Property<Guid>("Id")

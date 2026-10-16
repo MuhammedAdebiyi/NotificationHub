@@ -45,6 +45,15 @@ public class BrevoAdapter : IEmailProvider, IEmailProviderDomains
         if (message.Text is not null)
             payload["textContent"] = message.Text;
 
+        if (message.UnsubscribeUrl is not null)
+        {
+            payload["headers"] = new Dictionary<string, string>
+            {
+                ["List-Unsubscribe"] = $"<{message.UnsubscribeUrl}>",
+                ["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+            };
+        }
+
         var json = JsonSerializer.Serialize(payload);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 

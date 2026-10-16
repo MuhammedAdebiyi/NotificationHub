@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
@@ -95,9 +96,17 @@ public static class InfrastructureServiceExtensions
 
         // Redis
         var redisConnection = configuration.GetConnectionString("Redis") ?? "localhost:6379";
-        services.AddSingleton<IConnectionMultiplexer>(
-            ConnectionMultiplexer.Connect(redisConnection));
+        var redis = ConnectionMultiplexer.Connect(redisConnection);
+        services.AddSingleton<IConnectionMultiplexer>(redis);
         services.AddScoped<INotificationQueue, RedisNotificationQueue>();
+
+        // DataProtection — unsubscribe tokens must verify in BOTH api and worker
+        // containers, so the key ring is shared through Redis instead of the
+        // per-container default file system.
+        services.AddDataProtection()
+            .SetApplicationName("NotificationHub")
+            .PersistKeysToStackExchangeRedis(redis, "notificationhub:dataprotection-keys");
+        services.AddScoped<IUnsubscribeTokenService, UnsubscribeTokenService>();
 
         // Webhooks
         services.AddHttpClient();

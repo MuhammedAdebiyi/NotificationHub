@@ -17,6 +17,8 @@ public class StubNotificationProvider : INotificationProvider
     private readonly IEmailProviderFactory _emailProviderFactory;
     private readonly ILogger<StubNotificationProvider> _logger;
     private readonly AppDbContext _context;
+    private readonly IUnsubscribeTokenService _unsubscribeTokens;
+    private readonly Microsoft.Extensions.Configuration.IConfiguration _configuration;
 
     public string? LastProviderType { get; private set; }
 
@@ -25,11 +27,15 @@ public class StubNotificationProvider : INotificationProvider
     public StubNotificationProvider(
         IEmailProviderFactory emailProviderFactory,
         ILogger<StubNotificationProvider> logger,
-        AppDbContext context)
+        AppDbContext context,
+        IUnsubscribeTokenService unsubscribeTokens,
+        Microsoft.Extensions.Configuration.IConfiguration configuration)
     {
         _emailProviderFactory = emailProviderFactory;
         _logger = logger;
         _context = context;
+        _unsubscribeTokens = unsubscribeTokens;
+        _configuration = configuration;
     }
 
     public async Task<bool> SendAsync(
@@ -98,8 +104,27 @@ public class StubNotificationProvider : INotificationProvider
         }
 
         var to = notification.RecipientEmail;
+        var normalizedTo = to.Trim().ToLowerInvariant();
+
+        // Opted-out recipients are skipped entirely — required for unsubscribe
+        // compliance and it keeps Gmail from re-classifying us as a bulk spammer.
+        var optedOut = await _context.RecipientOptOuts.AnyAsync(
+            o => o.OrganizationId == notification.OrganizationId && o.Email == normalizedTo,
+            cancellationToken);
+
+        if (optedOut)
+        {
+            _logger.LogInformation("Skipping notification {Id} — {To} unsubscribed", notification.Id, normalizedTo);
+            await WriteLogAsync(notification, "System", "skipped — recipient unsubscribed", isSuccess: true, cancellationToken);
+            return true;
+        }
+
         var from = await ResolveFromAddressAsync(notification.OrganizationId, cancellationToken);
         var trackingPixel = $"<img src=\"https://notificationhub.space/api/v1/track/open/{notification.Id}\" width=\"1\" height=\"1\" style=\"display:none\" alt=\"\" />";
+
+        var apiBase = (_configuration["App:ApiBaseUrl"] ?? "https://api.notificationhub.space").TrimEnd('/');
+        var unsubscribeUrl = $"{apiBase}/api/v1/unsubscribe/{_unsubscribeTokens.CreateToken(notification.OrganizationId, normalizedTo)}";
+        var unsubscribeFooter = $"<p style=\"margin-top:20px;font-size:12px;color:#999\"><a href=\"{unsubscribeUrl}\" style=\"color:#999\">Unsubscribe</a></p>";
 
         // Payloads arrive as {subject, body} plain text or {subject, html} full HTML
         // documents. Wrap only plain text in <p>; HTML goes through as-is so the
@@ -110,23 +135,26 @@ public class StubNotificationProvider : INotificationProvider
         string html;
         if (!looksLikeHtml)
         {
-            html = $"<p>{content}</p>{trackingPixel}";
+            html = $"<p>{content}</p>{unsubscribeFooter}{trackingPixel}";
         }
         else if (content.Contains("</body>", StringComparison.OrdinalIgnoreCase))
         {
-            html = content.Replace("</body>", $"{trackingPixel}</body>", StringComparison.OrdinalIgnoreCase);
+            html = content.Replace("</body>", $"{unsubscribeFooter}{trackingPixel}</body>", StringComparison.OrdinalIgnoreCase);
         }
         else
         {
-            html = content + trackingPixel;
+            html = content + unsubscribeFooter + trackingPixel;
         }
+
+        var textPart = content + "\n\nUnsubscribe: " + unsubscribeUrl;
 
         var message = new EmailMessage(
             From: from,
             To: to,
             Subject: payload.Subject,
             Html: html,
-            Text: content
+            Text: textPart,
+            UnsubscribeUrl: unsubscribeUrl
         );
 
         // Fallback chain: default provider first, then the rest. Individual

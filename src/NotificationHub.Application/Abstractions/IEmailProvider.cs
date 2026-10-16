@@ -12,5 +12,6 @@ public record EmailMessage(
     string Subject,
     string Html,
     string? Text = null,
-    string? ProviderApiKey = null
+    string? ProviderApiKey = null,
+    string? UnsubscribeUrl = null
 );

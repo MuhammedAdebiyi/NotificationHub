@@ -45,6 +45,15 @@ public class SendGridAdapter : IEmailProvider, IEmailProviderDomains
             }
         };
 
+        if (message.UnsubscribeUrl is not null)
+        {
+            payload["headers"] = new Dictionary<string, string>
+            {
+                ["List-Unsubscribe"] = $"<{message.UnsubscribeUrl}>",
+                ["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+            };
+        }
+
         var json = JsonSerializer.Serialize(payload);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 
