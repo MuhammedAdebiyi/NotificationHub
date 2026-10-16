@@ -130,20 +130,39 @@ public class StubNotificationProvider : INotificationProvider
         // documents. Wrap only plain text in <p>; HTML goes through as-is so the
         // recipient actually renders the real email.
         var content = payload.Html ?? payload.Text ?? payload.Body ?? string.Empty;
+
+        // Templates can carry a {{unsubscribe_url}} placeholder — substitute the
+        // real per-recipient link so it doesn't render as broken literal text.
+        var hadPlaceholder = false;
+        foreach (var placeholder in new[] { "{{unsubscribe_url}}", "{unsubscribe_url}" })
+        {
+            if (content.Contains(placeholder, StringComparison.OrdinalIgnoreCase))
+            {
+                content = content.Replace(placeholder, unsubscribeUrl, StringComparison.OrdinalIgnoreCase);
+                hadPlaceholder = true;
+            }
+        }
+
         var looksLikeHtml = content.Contains('<') && content.Contains('>');
+
+        // If the template already has its own unsubscribe link (placeholder or
+        // hand-written), keep the designer's footer and skip the auto one.
+        var hasOwnUnsubscribe = hadPlaceholder ||
+            content.Contains("/unsubscribe", StringComparison.OrdinalIgnoreCase);
+        var footerHtml = hasOwnUnsubscribe ? string.Empty : unsubscribeFooter;
 
         string html;
         if (!looksLikeHtml)
         {
-            html = $"<p>{content}</p>{unsubscribeFooter}{trackingPixel}";
+            html = $"<p>{content}</p>{footerHtml}{trackingPixel}";
         }
         else if (content.Contains("</body>", StringComparison.OrdinalIgnoreCase))
         {
-            html = content.Replace("</body>", $"{unsubscribeFooter}{trackingPixel}</body>", StringComparison.OrdinalIgnoreCase);
+            html = content.Replace("</body>", $"{footerHtml}{trackingPixel}</body>", StringComparison.OrdinalIgnoreCase);
         }
         else
         {
-            html = content + unsubscribeFooter + trackingPixel;
+            html = content + footerHtml + trackingPixel;
         }
 
         var textPart = content + "\n\nUnsubscribe: " + unsubscribeUrl;
