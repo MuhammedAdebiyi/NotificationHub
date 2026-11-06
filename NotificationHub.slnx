@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/sdk/" />
+  <Folder Name="/sdk/csharp/">
+    <Project Path="sdk/csharp/NotificationHub.Client.csproj" />
+  </Folder>
   <Folder Name="/src/">
     <Project Path="src/NotificationHub.Api/NotificationHub.Api.csproj" />
     <Project Path="src/NotificationHub.Application/NotificationHub.Application.csproj" />
@@ -6,5 +10,8 @@
     <Project Path="src/NotificationHub.Infrastructure/NotificationHub.Infrastructure.csproj" />
     <Project Path="src/NotificationHub.Shared/NotificationHub.Shared.csproj" />
     <Project Path="src/NotificationHub.Worker/NotificationHub.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NotificationHub.Tests/NotificationHub.Tests.csproj" />
   </Folder>
 </Solution>

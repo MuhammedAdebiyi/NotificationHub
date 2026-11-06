@@ -47,6 +47,10 @@ public class SmtpAdapter : IEmailProvider
             Body = message.Html ?? message.Text ?? string.Empty,
             IsBodyHtml = message.Html is not null,
         };
+
+        if (!string.IsNullOrWhiteSpace(message.ReplyTo))
+            mailMessage.ReplyToList.Add(message.ReplyTo);
+
         mailMessage.To.Add(message.To);
 
         _logger.LogInformation("Sending email to {To} via SMTP ({Host}:{Port})", message.To, _host, _port);

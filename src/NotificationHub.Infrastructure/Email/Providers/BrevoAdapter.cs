@@ -45,6 +45,15 @@ public class BrevoAdapter : IEmailProvider, IEmailProviderDomains
         if (message.Text is not null)
             payload["textContent"] = message.Text;
 
+        // Brevo expects replyTo as an array of address objects.
+        if (message.ReplyTo is not null)
+        {
+            payload["replyTo"] = new[]
+            {
+                new Dictionary<string, string> { ["email"] = message.ReplyTo }
+            };
+        }
+
         if (message.UnsubscribeUrl is not null)
         {
             payload["headers"] = new Dictionary<string, string>

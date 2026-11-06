@@ -45,6 +45,14 @@ public class SendGridAdapter : IEmailProvider, IEmailProviderDomains
             }
         };
 
+        if (message.ReplyTo is not null)
+        {
+            payload["reply_to"] = new Dictionary<string, string>
+            {
+                ["email"] = message.ReplyTo
+            };
+        }
+
         if (message.UnsubscribeUrl is not null)
         {
             payload["headers"] = new Dictionary<string, string>

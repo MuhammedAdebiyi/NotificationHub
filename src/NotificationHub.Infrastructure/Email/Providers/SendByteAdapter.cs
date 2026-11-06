@@ -35,6 +35,10 @@ public class SendByteAdapter : IEmailProvider, IEmailProviderDomains
         if (message.Text is not null)
             payload["text"] = message.Text;
 
+        // SendByte mirrors Resend's shape: a single reply-to string.
+        if (message.ReplyTo is not null)
+            payload["reply_to"] = message.ReplyTo;
+
         var json = JsonSerializer.Serialize(payload);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
 

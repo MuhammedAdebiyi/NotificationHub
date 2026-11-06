@@ -35,6 +35,10 @@ public class ResendAdapter : IEmailProvider, IEmailProviderDomains
         if (message.Text is not null)
             payload["text"] = message.Text;
 
+        // Resend takes a single reply-to address as a plain string.
+        if (message.ReplyTo is not null)
+            payload["reply_to"] = message.ReplyTo;
+
         if (message.UnsubscribeUrl is not null)
         {
             payload["headers"] = new Dictionary<string, string>

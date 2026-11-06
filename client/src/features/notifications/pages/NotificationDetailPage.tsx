@@ -28,9 +28,12 @@ interface CampaignRef {
 }
 
 interface TemplateRef {
-  name: string
-  version: number
-  channel: string
+  id?: string
+  name?: string
+  // Version/channel are optional: the notifications API sends the template
+  // reference it resolved the reply-to from, without those extras.
+  version?: number
+  channel?: string
 }
 
 interface NotificationDetail {
@@ -56,6 +59,16 @@ interface NotificationDetail {
   acceptedAt?: string
   processedAt?: string
   deliveredAt?: string | null
+
+  // Reply-to/sender resolved when the notification was enqueued, plus where
+  // the value came from: request | template | organization | sender | default.
+  replyTo?: string | null
+  replyToSource?: string
+  senderEmail?: string | null
+  senderName?: string | null
+  senderSource?: string
+  templateId?: string | null
+
   provider?: ProviderInfo
   campaign?: CampaignRef
   template?: TemplateRef
@@ -95,6 +108,16 @@ function diffMs(a?: string | null, b?: string | null): number | null {
   if (!a || !b) return null
   const d = new Date(b).getTime() - new Date(a).getTime()
   return Number.isNaN(d) ? null : d
+}
+
+// Where the effective reply-to came from — resolved once when the
+// notification was enqueued, never re-resolved on retry.
+const replyToSourceLabels: Record<string, string> = {
+  request: 'From this request',
+  template: 'From the template',
+  organization: 'From organization settings',
+  sender: 'Sender address fallback',
+  default: 'Provider default',
 }
 
 /** Attempts a human-readable read of an email-shaped payload. Falls back to null if the
@@ -390,9 +413,11 @@ export default function NotificationDetailPage() {
             <div className="bg-fog border border-ink/10 rounded-xl p-6">
               <h2 className="font-display font-bold text-lg mb-3">Template</h2>
               <p className="font-medium text-ink mb-1">{notification.template.name}</p>
-              <p className="text-sm text-ink/50">
-                Version {notification.template.version} · {notification.template.channel}
-              </p>
+              {(notification.template.version || notification.template.channel) && (
+                <p className="text-sm text-ink/50">
+                  Version {notification.template.version} · {notification.template.channel}
+                </p>
+              )}
             </div>
           )}
 
@@ -409,6 +434,30 @@ export default function NotificationDetailPage() {
               )}
               {notification.apiKeyName && (
                 <MetaRow label="API Key" value={notification.apiKeyName} />
+              )}
+              <MetaRow
+                label="Reply-To"
+                value={notification.replyTo ?? 'Provider default'}
+                mono
+              />
+              <MetaRow
+                label="Reply-To source"
+                value={
+                  replyToSourceLabels[notification.replyToSource ?? 'default'] ??
+                  notification.replyToSource ??
+                  '—'
+                }
+              />
+              {notification.senderEmail && (
+                <MetaRow
+                  label="Sender"
+                  value={
+                    notification.senderName
+                      ? `${notification.senderName} <${notification.senderEmail}>`
+                      : notification.senderEmail
+                  }
+                  mono
+                />
               )}
               <MetaRow label="Created" value={new Date(notification.createdAt).toLocaleString()} />
               {notification.processedAt && (

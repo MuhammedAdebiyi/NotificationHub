@@ -31,14 +31,21 @@ public class SendByteEmailProvider : IEmailProvider
 
     public async Task<string> SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
-        var payload = new
+        var payload = new Dictionary<string, object?>
         {
-            from = message.From,
-            to = new[] { message.To },
-            subject = message.Subject,
-            html = message.Html,
-            text = message.Text
+            ["from"] = message.From,
+            ["to"] = new[] { message.To },
+            ["subject"] = message.Subject,
+            ["html"] = message.Html,
         };
+
+        if (message.Text is not null)
+            payload["text"] = message.Text;
+
+        // SendByte mirrors Resend's shape: a single reply-to string. Omitted
+        // entirely when unset so we never send an explicit null.
+        if (message.ReplyTo is not null)
+            payload["reply_to"] = message.ReplyTo;
 
         var json = JsonSerializer.Serialize(payload);
         var content = new StringContent(json, Encoding.UTF8, "application/json");

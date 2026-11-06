@@ -13,6 +13,7 @@ namespace NotificationHub.Infrastructure.Messaging.Providers;
 public class StubNotificationProvider : INotificationProvider
 {
     private const string CampaignFromEmail = "notifications@mail.notificationhub.space";
+    private const string DefaultFromName = "NotificationHub";
 
     private readonly IEmailProviderFactory _emailProviderFactory;
     private readonly ILogger<StubNotificationProvider> _logger;
@@ -119,7 +120,7 @@ public class StubNotificationProvider : INotificationProvider
             return true;
         }
 
-        var from = await ResolveFromAddressAsync(notification.OrganizationId, cancellationToken);
+        var from = await ResolveFromAsync(notification, cancellationToken);
         var trackingPixel = $"<img src=\"https://notificationhub.space/api/v1/track/open/{notification.Id}\" width=\"1\" height=\"1\" style=\"display:none\" alt=\"\" />";
 
         var apiBase = (_configuration["App:ApiBaseUrl"] ?? "https://api.notificationhub.space").TrimEnd('/');
@@ -173,7 +174,10 @@ public class StubNotificationProvider : INotificationProvider
             Subject: payload.Subject,
             Html: html,
             Text: textPart,
-            UnsubscribeUrl: unsubscribeUrl
+            UnsubscribeUrl: unsubscribeUrl,
+            // Frozen at enqueue time — a retry after the org changed its
+            // reply-to settings must still send the original Reply-To.
+            ReplyTo: notification.ReplyTo
         );
 
         // Fallback chain: default provider first, then the rest. Individual
@@ -221,11 +225,29 @@ public class StubNotificationProvider : INotificationProvider
         return true;
     }
 
-    // Every Notification row is created by CampaignWorker (see architecture notes —
-    // Import/other flows never create Notification rows directly), so this is always
-    // an org-branded campaign send. The display name is per-org (Organization.FromName);
-    // the email address stays on our verified sending domain since SES only lets us
-    // send from identities we've verified — orgs can't bring their own arbitrary From
+    // Sender resolved at enqueue time wins: the value stored on the
+    // notification is what the request was accepted with, so retries and DLQ
+    // replays never pick up a settings change made afterwards. Rows created
+    // before reply-to support have no stored sender and fall back to the
+    // organization settings below.
+    private async Task<string> ResolveFromAsync(Notification notification, CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(notification.SenderEmail))
+        {
+            var name = string.IsNullOrWhiteSpace(notification.SenderName)
+                ? DefaultFromName
+                : notification.SenderName;
+
+            return $"{name} <{notification.SenderEmail}>";
+        }
+
+        return await ResolveFromAddressAsync(notification.OrganizationId, cancellationToken);
+    }
+
+    // Legacy path (and safety net for rows without a stored sender). The
+    // display name is per-org (Organization.FromName); the email address
+    // stays on our verified sending domain since SES only lets us send from
+    // identities we've verified — orgs can't bring their own arbitrary From
     // address without a full domain-verification flow, which doesn't exist yet.
     private async Task<string> ResolveFromAddressAsync(Guid organizationId, CancellationToken cancellationToken)
     {

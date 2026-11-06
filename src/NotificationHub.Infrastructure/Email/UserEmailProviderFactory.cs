@@ -209,22 +209,22 @@ public class UserEmailProviderFactory : IEmailProviderFactory
         return config.ProviderType.ToLowerInvariant() switch
         {
             "resend" => new ResendAdapter(
-                new HttpClient(),
+                CreateHttpClient(),
                 apiKey,
                 serviceProvider.GetRequiredService<ILogger<ResendAdapter>>()),
 
             "sendbyte" => new SendByteAdapter(
-                new HttpClient(),
+                CreateHttpClient(),
                 apiKey,
                 serviceProvider.GetRequiredService<ILogger<SendByteAdapter>>()),
 
             "sendgrid" => new SendGridAdapter(
-                new HttpClient(),
+                CreateHttpClient(),
                 apiKey,
                 serviceProvider.GetRequiredService<ILogger<SendGridAdapter>>()),
 
             "brevo" => new BrevoAdapter(
-                new HttpClient(),
+                CreateHttpClient(),
                 apiKey,
                 serviceProvider.GetRequiredService<ILogger<BrevoAdapter>>()),
 
@@ -235,6 +235,11 @@ public class UserEmailProviderFactory : IEmailProviderFactory
             _ => throw new InvalidOperationException($"Unsupported email provider: {config.ProviderType}")
         };
     }
+
+    // Seam for the HTTP transport: tests override this to route every
+    // provider through a fake handler, so the fallback chain can be
+    // exercised without touching the real provider APIs.
+    protected virtual HttpClient CreateHttpClient() => new HttpClient();
 
     private IEmailProviderDomains? CreateDomainService(
         EmailProviderConfig config,

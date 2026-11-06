@@ -865,7 +865,8 @@ export default function SettingsPage() {
                   <span className="text-ink/50">Sender email</span>
                 </div>
                 <p className="text-xs text-ink/40 mb-2">
-                  The address your campaigns are sent from. Pick the one recipients should see
+                  The address your notifications are sent from, and the reply-to fallback
+                  when no reply-to is configured. Pick the one recipients should see
                   and reply to.
                 </p>
                 <div className="flex gap-2">
@@ -909,7 +910,9 @@ export default function SettingsPage() {
                   <span className="text-ink/50">Reply-to email</span>
                 </div>
                 <p className="text-xs text-ink/40 mb-2">
-                  Where replies go when recipients hit "Reply". Leave empty to use the sender email.
+                  Where replies go when recipients hit "Reply". Applies to every notification
+                  sent through the API (a request can override it per send). Leave empty to
+                  use the sender email.
                 </p>
                 <div className="flex gap-2">
                   <input
