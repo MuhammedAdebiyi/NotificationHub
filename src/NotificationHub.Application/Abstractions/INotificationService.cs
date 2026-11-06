@@ -41,7 +41,18 @@ public record NotificationDetailDto(
     DateTime? ProcessedAt,
     string? WorkerId,
     string? ProviderMessageId,
-    DateTime? DeliveredAt
+    DateTime? DeliveredAt,
+
+    // Reply-to/sender frozen at enqueue time, plus where each came from
+    // ("request" | "template" | "organization" | "sender" | "default").
+    string? ReplyTo,
+    string ReplyToSource,
+    string? SenderEmail,
+    string? SenderName,
+    string SenderSource,
+
+    Guid? TemplateId,
+    string? TemplateName
 );
 
 public record NotificationLogDto(

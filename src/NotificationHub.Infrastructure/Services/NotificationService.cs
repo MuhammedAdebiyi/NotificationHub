@@ -21,6 +21,7 @@ public class NotificationService : INotificationService
     {
         var notification = await _context.Notifications
             .Include(n => n.Logs.OrderBy(l => l.CreatedAt))
+            .Include(n => n.Template)
             .FirstOrDefaultAsync(n =>
                 n.OrganizationId == organizationId && n.PublicId == publicId, ct);
 
@@ -53,7 +54,14 @@ public class NotificationService : INotificationService
             notification.ProcessedAt,
             notification.WorkerId,
             notification.ProviderMessageId,
-            notification.DeliveredAt
+            notification.DeliveredAt,
+            notification.ReplyTo,
+            notification.ReplyToSource.ToApiString(),
+            notification.SenderEmail,
+            notification.SenderName,
+            notification.SenderSource.ToApiString(),
+            notification.TemplateId,
+            notification.Template?.Name
         );
     }
 

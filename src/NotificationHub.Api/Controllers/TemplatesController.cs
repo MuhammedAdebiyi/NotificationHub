@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using NotificationHub.Application.Abstractions;
+using NotificationHub.Application.Validation;
 using NotificationHub.Domain.Entities;
 using NotificationHub.Shared.Abstractions;
 
@@ -48,7 +49,7 @@ public class TemplatesController : ControllerBase
 
         return Ok(new
         {
-            items = items.Select(t => new { t.Id, t.Name, t.Subject, t.CreatedAt }),
+            items = items.Select(t => new { t.Id, t.Name, t.Subject, t.ReplyTo, t.CreatedAt }),
             totalCount,
             pageNumber = page,
             pageSize
@@ -73,7 +74,17 @@ public class TemplatesController : ControllerBase
         if (template is null)
             return NotFound(new { error = "Template not found." });
 
-        return Ok(new { template.Id, template.Name, template.Subject, template.Body, template.CreatedAt });
+        return Ok(new
+        {
+            template.Id,
+            template.Name,
+            template.Subject,
+            template.Body,
+            template.ReplyTo,
+            template.SenderEmail,
+            template.SenderName,
+            template.CreatedAt
+        });
     }
 
     /// <summary>
@@ -93,6 +104,10 @@ public class TemplatesController : ControllerBase
         if (_currentUser.UserId is null)
             return Unauthorized(new { error = "No user context." });
 
+        var invalid = ValidateAddressing(request);
+        if (invalid is not null)
+            return invalid;
+
         var template = new Template
         {
             OrganizationId = _currentOrg.OrganizationId.Value,
@@ -100,6 +115,9 @@ public class TemplatesController : ControllerBase
             Name = request.Name,
             Subject = request.Subject,
             Body = request.Body,
+            ReplyTo = Normalize(request.ReplyTo),
+            SenderEmail = Normalize(request.SenderEmail),
+            SenderName = Normalize(request.SenderName),
         };
 
         await _repository.AddAsync(template, cancellationToken);
@@ -130,9 +148,16 @@ public class TemplatesController : ControllerBase
         if (template is null)
             return NotFound(new { error = "Template not found." });
 
+        var invalid = ValidateAddressing(request);
+        if (invalid is not null)
+            return invalid;
+
         template.Name = request.Name;
         template.Subject = request.Subject;
         template.Body = request.Body;
+        template.ReplyTo = Normalize(request.ReplyTo);
+        template.SenderEmail = Normalize(request.SenderEmail);
+        template.SenderName = Normalize(request.SenderName);
         template.UpdatedAt = DateTime.UtcNow;
 
         await _repository.SaveChangesAsync(cancellationToken);
@@ -156,6 +181,47 @@ public class TemplatesController : ControllerBase
         await _repository.SaveChangesAsync(cancellationToken);
         return Ok(new { deleted = true });
     }
+
+    /// <summary>
+    /// Rejects malformed addressing on a template with the same stable codes
+    /// the notifications endpoint uses, so one client-side check covers both.
+    /// </summary>
+    private BadRequestObjectResult? ValidateAddressing(TemplateRequest request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.ReplyTo) &&
+            !EmailAddressRules.IsSingleEmailAddress(request.ReplyTo))
+        {
+            return BadRequest(new
+            {
+                error = "ReplyTo must be a single email address.",
+                code = NotificationErrorCodes.InvalidReplyTo,
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.SenderEmail) &&
+            !EmailAddressRules.IsSingleEmailAddress(request.SenderEmail))
+        {
+            return BadRequest(new
+            {
+                error = "SenderEmail must be a single email address.",
+                code = NotificationErrorCodes.InvalidSenderEmail,
+            });
+        }
+
+        if (request.SenderName?.Trim().Length > 100)
+        {
+            return BadRequest(new
+            {
+                error = "SenderName must be 100 characters or fewer.",
+                code = NotificationErrorCodes.InvalidSenderName,
+            });
+        }
+
+        return null;
+    }
+
+    private static string? Normalize(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 /// <summary>
@@ -167,5 +233,10 @@ public record TemplateRequest(
     /// <summary>Email subject line (supports {{variable}} placeholders)</summary>
     string Subject,
     /// <summary>Email body HTML (supports {{variable}} placeholders)</summary>
-    string Body
+    string Body,
+    // Optional addressing defaults for notifications created from this
+    // template. A null value clears the field (PUT replaces the template).
+    string? ReplyTo = null,
+    string? SenderEmail = null,
+    string? SenderName = null
 );

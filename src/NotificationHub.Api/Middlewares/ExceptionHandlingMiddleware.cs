@@ -29,8 +29,18 @@ public class ExceptionHandlingMiddleware
         }
         catch (ValidationException ex)
         {
-            var errors = ex.Errors.Select(e => e.ErrorMessage);
-            await WriteResponse(context, HttpStatusCode.BadRequest, new { errors });
+            var errors = ex.Errors.Select(e => e.ErrorMessage).ToList();
+
+            // Surface the first explicitly-set error code (e.g.
+            // "invalid_reply_to") so clients can branch on it. FluentValidation's
+            // built-in codes are PascalCase ("NotEmpty"), custom ones are
+            // snake_case, which is what the underscore filter picks out.
+            var code = ex.Errors
+                .Select(e => e.ErrorCode)
+                .FirstOrDefault(c => c.Contains('_', StringComparison.Ordinal));
+
+            await WriteResponse(context, HttpStatusCode.BadRequest,
+                new { error = errors.FirstOrDefault(), errors, code });
         }
         catch (NotFoundException ex)
         {

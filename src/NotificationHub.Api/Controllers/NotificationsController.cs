@@ -59,16 +59,23 @@ public class NotificationsController : ControllerBase
     /// The `payload` field is a JSON string containing provider-specific fields:
     /// - For email: `subject`, `html` (or `text`)
     /// - The `type` field is a free-form string (e.g. "transactional", "marketing", "alert")
-    /// 
+    ///
+    /// Optional addressing fields: `replyTo` (single address), `senderEmail`,
+    /// `senderName` and `templateId` are resolved into the effective reply-to
+    /// and sender when the notification is enqueued — see "Reply-to resolution"
+    /// in the API docs for the precedence order.
+    ///
     /// Use the optional `Idempotency-Key` header to prevent duplicate sends.
     /// </remarks>
     /// <param name="request">Notification details</param>
     /// <param name="idempotencyKey">Optional idempotency key to prevent duplicate sends</param>
     /// <returns>The public ID of the created notification</returns>
     /// <response code="200">Notification created and queued for delivery</response>
+    /// <response code="400">Invalid reply-to/sender, unverified domain, or unknown template (see `code`)</response>
     /// <response code="409">Duplicate request (idempotency key already used)</response>
     [HttpPost]
     [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 400)]
     [ProducesResponseType(typeof(object), 409)]
     public async Task<IActionResult> Create(
         [FromBody] CreateNotificationRequest request,
@@ -88,12 +95,24 @@ public class NotificationsController : ControllerBase
             request.Type,
             request.Channel,
             request.Payload,
-            idempotencyKey);
+            idempotencyKey,
+            request.ReplyTo,
+            request.SenderEmail,
+            request.SenderName,
+            request.TemplateId);
 
         var result = await _mediator.Send(command, cancellationToken);
 
         if (!result.IsSuccess)
+        {
+            // Failures with a stable code (invalid/unverified reply-to,
+            // unknown template, ...) are client errors → 400. Everything
+            // else is the idempotency-key collision → 409.
+            if (result.Code is not null)
+                return BadRequest(new { error = result.Error, code = result.Code });
+
             return Conflict(new { error = result.Error });
+        }
 
         return Ok(new { publicId = result.Value });
     }
@@ -261,5 +280,13 @@ public record CreateNotificationRequest(
     /// <summary>Delivery channel: Email, Sms, Push, or InApp</summary>
     NotificationHub.Domain.Enums.NotificationChannel Channel,
     /// <summary>JSON string with provider-specific payload. For email: {"subject":"...", "html":"...", "text":"..."}</summary>
-    string Payload
+    string Payload,
+    /// <summary>Optional single reply-to address. Highest precedence — see "Reply-to resolution" in the API docs.</summary>
+    string? ReplyTo = null,
+    /// <summary>Optional sender address override (must be on a verified domain)</summary>
+    string? SenderEmail = null,
+    /// <summary>Optional sender display name override</summary>
+    string? SenderName = null,
+    /// <summary>Optional template whose reply-to/sender apply when this request sets none of its own</summary>
+    Guid? TemplateId = null
 );
