@@ -12,5 +12,8 @@ public class TemplateConfiguration : IEntityTypeConfiguration<Template>
         builder.Property(t => t.Name).IsRequired().HasMaxLength(200);
         builder.Property(t => t.Subject).HasMaxLength(500);
         builder.Property(t => t.Body).IsRequired();
+        builder.Property(t => t.ReplyTo).HasMaxLength(320);
+        builder.Property(t => t.SenderEmail).HasMaxLength(320);
+        builder.Property(t => t.SenderName).HasMaxLength(100);
     }
 }

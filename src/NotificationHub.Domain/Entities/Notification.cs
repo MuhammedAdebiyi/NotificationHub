@@ -22,6 +22,25 @@ public class Notification : BaseEntity
     public NotificationChannel Channel { get; set; }
     public NotificationStatus Status { get; set; } = NotificationStatus.Pending;
 
+    // Reply-to and sender, resolved once when the notification is enqueued
+    // (request > template > organization > sender > provider default) and then
+    // frozen: retries and DLQ replays reuse these values instead of reading
+    // settings that may have changed in the meantime.
+    public string? ReplyTo { get; set; }
+    public ResolutionSource ReplyToSource { get; set; } = ResolutionSource.ProviderDefault;
+
+    public string? SenderEmail { get; set; }
+    public string? SenderName { get; set; }
+    public ResolutionSource SenderSource { get; set; } = ResolutionSource.ProviderDefault;
+
+    /// <summary>
+    /// Template this notification was created from (context for the resolved
+    /// reply-to/sender). Null for notifications sent without a template.
+    /// </summary>
+    public Guid? TemplateId { get; set; }
+
+    public Template? Template { get; set; }
+
     // Original payload
     public string Payload { get; set; } = string.Empty;
 
