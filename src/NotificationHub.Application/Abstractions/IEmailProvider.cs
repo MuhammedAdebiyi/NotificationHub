@@ -13,5 +13,8 @@ public record EmailMessage(
     string Html,
     string? Text = null,
     string? ProviderApiKey = null,
-    string? UnsubscribeUrl = null
+    string? UnsubscribeUrl = null,
+    // Resolved once at enqueue time and carried through every provider
+    // attempt — null means "provider default" (no Reply-To header).
+    string? ReplyTo = null
 );
