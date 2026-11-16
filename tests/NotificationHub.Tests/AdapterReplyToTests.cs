@@ -71,15 +71,15 @@ public class AdapterReplyToTests
     }
 
     [Fact]
-    public async Task Brevo_sends_reply_to_as_an_array_of_addresses()
+    public async Task Brevo_sends_reply_to_as_a_single_address_object()
     {
         var payload = await SendAndGetPayloadAsync(
             h => new BrevoAdapter(new HttpClient(h), "key", NullLogger<BrevoAdapter>.Instance),
             replyTo: "support@example.com");
 
         var replyTo = payload.GetProperty("replyTo");
-        Assert.Equal(JsonValueKind.Array, replyTo.ValueKind);
-        Assert.Equal("support@example.com", replyTo[0].GetProperty("email").GetString());
+        Assert.Equal(JsonValueKind.Object, replyTo.ValueKind);
+        Assert.Equal("support@example.com", replyTo.GetProperty("email").GetString());
     }
 
     [Fact]

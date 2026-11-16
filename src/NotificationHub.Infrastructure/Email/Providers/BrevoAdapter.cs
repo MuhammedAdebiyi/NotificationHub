@@ -45,12 +45,13 @@ public class BrevoAdapter : IEmailProvider, IEmailProviderDomains
         if (message.Text is not null)
             payload["textContent"] = message.Text;
 
-        // Brevo expects replyTo as an array of address objects.
+        // Brevo expects replyTo as a single address object. An array is
+        // rejected with 400 invalid_parameter "replyTo is not valid".
         if (message.ReplyTo is not null)
         {
-            payload["replyTo"] = new[]
+            payload["replyTo"] = new Dictionary<string, string>
             {
-                new Dictionary<string, string> { ["email"] = message.ReplyTo }
+                ["email"] = message.ReplyTo
             };
         }
 

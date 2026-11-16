@@ -128,12 +128,12 @@ public class ProviderFallbackTests
         var firstPayload = JsonDocument.Parse(first.Body).RootElement;
         Assert.Equal("support@example.com", firstPayload.GetProperty("reply_to").GetString());
 
-        // Attempt 2 — Brevo, same address in its array shape.
+        // Attempt 2 — Brevo, same address in its single-object shape.
         var second = handler.Requests[1];
         Assert.Equal("api.brevo.com", second.Uri.Host);
         var secondPayload = JsonDocument.Parse(second.Body).RootElement;
         Assert.Equal("support@example.com",
-            secondPayload.GetProperty("replyTo")[0].GetProperty("email").GetString());
+            secondPayload.GetProperty("replyTo").GetProperty("email").GetString());
     }
 
     [Fact]
